@@ -292,6 +292,17 @@ export default function App() {
           <p style={styles.footerText}>
             🪔 Gaddiannaram Utsav Samithi • Dilsukhnagar, Hyderabad 🪔
           </p>
+
+          <p style={styles.footerLinks}>
+            <a href="/policies.html" style={styles.footerLink}>Terms &amp; Conditions</a>
+            {' • '}
+            <a href="/policies.html" style={styles.footerLink}>Privacy Policy</a>
+            {' • '}
+            <a href="/policies.html" style={styles.footerLink}>Refund Policy</a>
+            {' • '}
+            <a href="/policies.html" style={styles.footerLink}>Contact Us</a>
+          </p>
+
           <p style={styles.footerSub}>Ganesh Chaturthi 2026</p>
         </footer>
 
@@ -583,6 +594,17 @@ const styles = {
     letterSpacing: '0.4px',
     color: '#ffe0b2',
     textShadow: '0 1px 6px rgba(0,0,0,0.85)'
+  },
+  footerLinks: {
+    margin: '10px 0 0',
+    fontSize: '12px',
+    color: '#ffe0b2',
+    letterSpacing: '0.3px'
+  },
+  footerLink: {
+    color: '#FFD700',
+    textDecoration: 'underline',
+    textShadow: '0 1px 5px rgba(0,0,0,0.85)'
   },
   footerSub: {
     margin: '6px 0 0',
