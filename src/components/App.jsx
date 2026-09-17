@@ -1,6 +1,8 @@
 import ganeshImg from '../assets/ganesh.jpeg';
 import React, { useState, useEffect } from 'react';
 
+const API_BASE = 'https://ganesh-ikqb.onrender.com';
+
 export default function App() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -12,6 +14,11 @@ export default function App() {
 
   // 🎯 DRAW DATE: 25th at 1:00 PM (month 8 = September)
   const DRAW_DATE = new Date(new Date().getFullYear(), 8, 25, 13, 0, 0);
+
+  // 🔥 Warm up the backend on page load (fixes Render cold starts)
+  useEffect(() => {
+    fetch(`${API_BASE}/`).catch(() => {});
+  }, []);
 
   // ⏳ Countdown
   useEffect(() => {
@@ -33,6 +40,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // ⏱️ Fetch with timeout helper
+  const fetchWithTimeout = (url, opts = {}, ms = 30000) =>
+    Promise.race([
+      fetch(url, opts),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('Request timed out')), ms)
+      ),
+    ]);
+
+  // 🔁 Retry wrapper for cold-start resilience
+  const createOrderWithRetry = async (body, attempts = 3) => {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetchWithTimeout(
+          `${API_BASE}/api/token/create`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          },
+          30000
+        );
+        if (res.ok) return await res.json();
+        const errBody = await res.text();
+        lastErr = new Error(`Server ${res.status}: ${errBody}`);
+      } catch (err) {
+        lastErr = err;
+      }
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
+    throw lastErr || new Error('Backend unreachable');
+  };
+
   const loadRazorpayScript = () =>
     new Promise((resolve) => {
       if (window.Razorpay) return resolve(true);
@@ -41,6 +84,9 @@ export default function App() {
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
+
+      // ⏰ safety timeout — fail after 10s
+      setTimeout(() => resolve(false), 10000);
     });
 
   const handleSubmit = async (e) => {
@@ -49,21 +95,16 @@ export default function App() {
 
     const isLoaded = await loadRazorpayScript();
     if (!isLoaded) {
-      alert('Failed to load payment gateway');
+      alert('Failed to load payment gateway. Check your internet and try again.');
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/token/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone })
-      });
-      const data = await res.json();
+      const data = await createOrderWithRetry({ name, phone });
 
       if (!data.success) {
-        alert('Order creation failed');
+        alert('Order creation failed: ' + (data.error || data.message || 'unknown'));
         setLoading(false);
         return;
       }
@@ -78,33 +119,43 @@ export default function App() {
         prefill: { name, contact: phone },
         theme: { color: '#e65100' },
         handler: async function (response) {
-          const verifyRes = await fetch('http://localhost:5000/api/payment/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              tokenNo: data.tokenNo
-            })
-          });
-          const verifyData = await verifyRes.json();
-          if (verifyData.success) {
-            setIsPaid(true);
-            setWhatsappUrl(verifyData.whatsappUrl);
-            setConfirmedToken(verifyData.tokenDetails);
-          } else {
-            alert('Payment verification failed!');
+          try {
+            const verifyRes = await fetchWithTimeout(
+              `${API_BASE}/api/payment/verify`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  tokenNo: data.tokenNo
+                })
+              },
+              30000
+            );
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              setIsPaid(true);
+              setWhatsappUrl(verifyData.whatsappUrl);
+              setConfirmedToken(verifyData.tokenDetails);
+            } else {
+              alert('Payment verification failed: ' + (verifyData.message || 'unknown'));
+            }
+          } catch (verr) {
+            console.error('VERIFY ERROR:', verr);
+            alert('Payment done, but verification failed: ' + verr.message);
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
         },
         modal: { ondismiss: () => setLoading(false) }
       };
 
       new window.Razorpay(options).open();
     } catch (err) {
-      console.error(err);
-      alert('Something went wrong. Try again.');
+      console.error('PAYMENT ERROR:', err);
+      alert('Payment error: ' + (err.message || 'unknown'));
       setLoading(false);
     }
   };
@@ -296,19 +347,19 @@ const styles = {
   ============================================================ */
   topImageWrap: {
     width: '100%',
-    minHeight: '100vh',            /* ✅ FULL HEIGHT */
+    minHeight: '100vh',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    background: 'transparent',      /* ✅ transparent so bg image flows */
+    background: 'transparent',
     padding: 0,
     margin: 0
   },
   topImage: {
-    width: '100%',                  /* ✅ FULL WIDTH */
-    height: '100vh',                /* ✅ FULL HEIGHT */
+    width: '100%',
+    height: '100vh',
     maxHeight: '100vh',
-    objectFit: 'contain',           /* keeps whole idol visible */
+    objectFit: 'contain',
     display: 'block'
   },
 
@@ -320,7 +371,7 @@ const styles = {
     maxWidth: '700px',
     textAlign: 'center',
     padding: '30px 20px 20px',
-    background: 'transparent'       /* ✅ transparent */
+    background: 'transparent'
   },
   eventName: {
     margin: 0,
@@ -346,7 +397,7 @@ const styles = {
     maxWidth: '520px',
     textAlign: 'center',
     padding: '14px 20px 24px',
-    background: 'transparent'       /* ✅ transparent */
+    background: 'transparent'
   },
   countdownLabel: {
     margin: '0 0 14px',
@@ -363,7 +414,7 @@ const styles = {
     flexWrap: 'wrap'
   },
   timeBlock: {
-    background: 'rgba(183, 28, 28, 0.55)',   /* semi-transparent */
+    background: 'rgba(183, 28, 28, 0.55)',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
     border: '1.5px solid rgba(255, 215, 0, 0.55)',
@@ -397,7 +448,7 @@ const styles = {
     width: '100%',
     maxWidth: '460px',
     margin: '10px 16px 40px',
-    background: 'rgba(255, 248, 240, 0.15)',      /* ✅ transparent */
+    background: 'rgba(255, 248, 240, 0.15)',
     backdropFilter: 'blur(20px) saturate(180%)',
     WebkitBackdropFilter: 'blur(20px) saturate(180%)',
     border: '1.5px solid rgba(255, 255, 255, 0.35)',
