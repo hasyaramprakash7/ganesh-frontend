@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE = 'https://ganesh-ikqb.onrender.com';
 
+// ⚠️ Change to "production" when you go live (must match backend CASHFREE_ENV)
+const CASHFREE_MODE = 'sandbox';
+
 export default function App() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -10,7 +13,12 @@ export default function App() {
   const [isPaid, setIsPaid] = useState(false);
   const [whatsappUrl, setWhatsappUrl] = useState('');
   const [confirmedToken, setConfirmedToken] = useState(null);
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [timeLeft, setTimeLeft] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
 
   // 🎯 DRAW DATE: 25th at 1:00 PM (month 8 = September)
   const DRAW_DATE = new Date(new Date().getFullYear(), 8, 25, 13, 0, 0);
@@ -38,6 +46,7 @@ export default function App() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ⏱️ Fetch with timeout helper
@@ -48,6 +57,8 @@ export default function App() {
         setTimeout(() => rej(new Error('Request timed out')), ms)
       ),
     ]);
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // 🔁 Retry wrapper for cold-start resilience
   const createOrderWithRetry = async (body, attempts = 3) => {
@@ -63,37 +74,77 @@ export default function App() {
           },
           30000
         );
-        if (res.ok) return await res.json();
-        const errBody = await res.text();
-        lastErr = new Error(`Server ${res.status}: ${errBody}`);
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.success) return json;
+        lastErr = new Error(
+          json.error || json.message || `Server ${res.status}`
+        );
       } catch (err) {
         lastErr = err;
       }
-      if (i < attempts - 1) {
-        await new Promise((r) => setTimeout(r, 3000));
-      }
+      if (i < attempts - 1) await sleep(3000);
     }
     throw lastErr || new Error('Backend unreachable');
   };
 
-  const loadRazorpayScript = () =>
+  // 🔁 Poll the backend until Cashfree confirms the order is PAID
+  const verifyPaymentWithRetry = async (orderId, tokenNo, attempts = 6) => {
+    let lastResult = {
+      success: false,
+      message: 'Payment not confirmed yet. Please try again in a minute.',
+    };
+
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetchWithTimeout(
+          `${API_BASE}/api/payment/verify`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, tokenNo }),
+          },
+          30000
+        );
+        const json = await res.json().catch(() => ({}));
+
+        if (json.success) return json;
+
+        lastResult = json;
+        if (!json.pending) return json; // hard failure — stop retrying
+      } catch (err) {
+        lastResult = { success: false, message: err.message };
+      }
+      if (i < attempts - 1) await sleep(2500);
+    }
+    return lastResult;
+  };
+
+  // 📦 Load Cashfree JS SDK v3
+  const loadCashfreeScript = () =>
     new Promise((resolve) => {
-      if (window.Razorpay) return resolve(true);
+      if (window.Cashfree) return resolve(true);
+      const existing = document.querySelector(
+        'script[src="https://sdk.cashfree.com/js/v3/cashfree.js"]'
+      );
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true));
+        existing.addEventListener('error', () => resolve(false));
+        return;
+      }
       const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
-
-      // ⏰ safety timeout — fail after 10s
       setTimeout(() => resolve(false), 10000);
     });
 
+  // 🚀 MAIN SUBMIT HANDLER
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    const isLoaded = await loadRazorpayScript();
+    const isLoaded = await loadCashfreeScript();
     if (!isLoaded) {
       alert('Failed to load payment gateway. Check your internet and try again.');
       setLoading(false);
@@ -103,56 +154,45 @@ export default function App() {
     try {
       const data = await createOrderWithRetry({ name, phone });
 
-      if (!data.success) {
-        alert('Order creation failed: ' + (data.error || data.message || 'unknown'));
-        setLoading(false);
-        return;
-      }
+      const cashfree = window.Cashfree({ mode: CASHFREE_MODE });
 
-      const options = {
-        key: data.keyId,
-        amount: data.amount,
-        currency: 'INR',
-        name: 'Gaddiannaram Utsav Samithi',
-        description: 'Ganesh Chaturthi Token Fee ₹20',
-        order_id: data.orderId,
-        prefill: { name, contact: phone },
-        theme: { color: '#e65100' },
-        handler: async function (response) {
-          try {
-            const verifyRes = await fetchWithTimeout(
-              `${API_BASE}/api/payment/verify`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  tokenNo: data.tokenNo
-                })
-              },
-              30000
-            );
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              setIsPaid(true);
-              setWhatsappUrl(verifyData.whatsappUrl);
-              setConfirmedToken(verifyData.tokenDetails);
-            } else {
-              alert('Payment verification failed: ' + (verifyData.message || 'unknown'));
-            }
-          } catch (verr) {
-            console.error('VERIFY ERROR:', verr);
-            alert('Payment done, but verification failed: ' + verr.message);
-          } finally {
-            setLoading(false);
-          }
-        },
-        modal: { ondismiss: () => setLoading(false) }
+      const checkoutOptions = {
+        paymentSessionId: data.paymentSessionId,
+        redirectTarget: '_modal',
       };
 
-      new window.Razorpay(options).open();
+      cashfree
+        .checkout(checkoutOptions)
+        .then(async (result) => {
+          // User closed the modal without paying
+          if (result && result.error) {
+            console.warn('Checkout closed / error:', result.error);
+          }
+
+          // Always verify server-side — never trust the browser result
+          const verifyData = await verifyPaymentWithRetry(
+            data.orderId,
+            data.tokenNo
+          );
+
+          if (verifyData.success) {
+            setIsPaid(true);
+            setWhatsappUrl(verifyData.whatsappUrl);
+            setConfirmedToken(verifyData.tokenDetails);
+          } else {
+            alert(
+              'Payment verification failed: ' +
+                (verifyData.message || verifyData.error || 'unknown')
+            );
+          }
+        })
+        .catch((err) => {
+          console.error('CASHFREE CHECKOUT ERROR:', err);
+          alert('Payment error: ' + (err?.message || 'unknown'));
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     } catch (err) {
       console.error('PAYMENT ERROR:', err);
       alert('Payment error: ' + (err.message || 'unknown'));
@@ -164,7 +204,7 @@ export default function App() {
     <div
       style={{
         ...styles.root,
-        backgroundImage: `url(${ganeshImg})`
+        backgroundImage: `url(${ganeshImg})`,
       }}
     >
       {/* Dark overlay to keep text readable over image */}
@@ -172,20 +212,17 @@ export default function App() {
 
       {/* ============ CONTENT ============ */}
       <div style={styles.content}>
-
         {/* 🖼️ STEP 1: TOP IMAGE — FULL WIDTH + FULL HEIGHT */}
         <div style={styles.topImageWrap}>
-          <img
-            src={ganeshImg}
-            alt="Ganesh Idol"
-            style={styles.topImage}
-          />
+          <img src={ganeshImg} alt="Ganesh Idol" style={styles.topImage} />
         </div>
 
         {/* 🏷️ STEP 2: EVENT NAME BELOW IMAGE (transparent bg) */}
         <div style={styles.headerSection}>
           <h1 style={styles.eventName}>🪔 Gaddiannaram Utsav Samithi 🪔</h1>
-          <p style={styles.eventLocation}>📍 Gaddiannaram, Dilsukhnagar, Hyderabad</p>
+          <p style={styles.eventLocation}>
+            📍 Gaddiannaram, Dilsukhnagar, Hyderabad
+          </p>
         </div>
 
         {/* ⏳ STEP 3: COUNTDOWN (transparent glass) */}
@@ -197,15 +234,21 @@ export default function App() {
               <span style={styles.timeLabel}>Days</span>
             </div>
             <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>{String(timeLeft.hours).padStart(2, '0')}</span>
+              <span style={styles.timeNum}>
+                {String(timeLeft.hours).padStart(2, '0')}
+              </span>
               <span style={styles.timeLabel}>Hours</span>
             </div>
             <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>{String(timeLeft.minutes).padStart(2, '0')}</span>
+              <span style={styles.timeNum}>
+                {String(timeLeft.minutes).padStart(2, '0')}
+              </span>
               <span style={styles.timeLabel}>Min</span>
             </div>
             <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>{String(timeLeft.seconds).padStart(2, '0')}</span>
+              <span style={styles.timeNum}>
+                {String(timeLeft.seconds).padStart(2, '0')}
+              </span>
               <span style={styles.timeLabel}>Sec</span>
             </div>
           </div>
@@ -237,7 +280,9 @@ export default function App() {
                   pattern="[0-9]{10}"
                   maxLength="10"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) =>
+                    setPhone(e.target.value.replace(/\D/g, ''))
+                  }
                   placeholder="10-digit mobile number"
                   style={styles.input}
                 />
@@ -247,7 +292,7 @@ export default function App() {
                 {loading ? '⏳ Processing...' : '💰 Pay ₹20 & Get Token'}
               </button>
 
-              <p style={styles.note}>🔒 Secure payment via Razorpay</p>
+              <p style={styles.note}>🔒 Secure payment via Cashfree</p>
             </form>
           ) : (
             <div style={styles.successBox}>
@@ -261,7 +306,9 @@ export default function App() {
                 </div>
                 <div style={styles.detailRow}>
                   <span style={styles.detailKey}>Token No</span>
-                  <span style={styles.detailValHighlight}>{confirmedToken.tokenNo}</span>
+                  <span style={styles.detailValHighlight}>
+                    {confirmedToken.tokenNo}
+                  </span>
                 </div>
                 <div style={styles.detailRow}>
                   <span style={styles.detailKey}>Phone</span>
@@ -282,7 +329,9 @@ export default function App() {
                 📲 Send Token on WhatsApp
               </a>
 
-              <p style={styles.blessing}>🙏 Blessings to you and your family 🙏</p>
+              <p style={styles.blessing}>
+                🙏 Blessings to you and your family 🙏
+              </p>
             </div>
           )}
         </div>
@@ -294,18 +343,25 @@ export default function App() {
           </p>
 
           <p style={styles.footerLinks}>
-            <a href="/policies.html" style={styles.footerLink}>Terms &amp; Conditions</a>
+            <a href="/policies.html" style={styles.footerLink}>
+              Terms &amp; Conditions
+            </a>
             {' • '}
-            <a href="/policies.html" style={styles.footerLink}>Privacy Policy</a>
+            <a href="/policies.html" style={styles.footerLink}>
+              Privacy Policy
+            </a>
             {' • '}
-            <a href="/policies.html" style={styles.footerLink}>Refund Policy</a>
+            <a href="/policies.html" style={styles.footerLink}>
+              Refund Policy
+            </a>
             {' • '}
-            <a href="/policies.html" style={styles.footerLink}>Contact Us</a>
+            <a href="/policies.html" style={styles.footerLink}>
+              Contact Us
+            </a>
           </p>
 
           <p style={styles.footerSub}>Ganesh Chaturthi 2026</p>
         </footer>
-
       </div>
     </div>
   );
@@ -315,9 +371,6 @@ export default function App() {
    🎨 STYLES
    ============================================================ */
 const styles = {
-  /* ============================================================
-     ROOT — FULL-PAGE BACKGROUND IMAGE (fixed, covers everything)
-  ============================================================ */
   root: {
     position: 'relative',
     minHeight: '100vh',
@@ -329,33 +382,27 @@ const styles = {
     backgroundPosition: 'center center',
     backgroundRepeat: 'no-repeat',
     backgroundAttachment: 'fixed',
-    overflowX: 'hidden'
+    overflowX: 'hidden',
   },
 
-  /* Dark overlay so text remains readable over the background image */
   bgOverlay: {
     position: 'fixed',
     inset: 0,
     background:
       'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(74,14,14,0.75) 50%, rgba(0,0,0,0.85) 100%)',
     zIndex: 0,
-    pointerEvents: 'none'
+    pointerEvents: 'none',
   },
 
-  /* All content sits above the overlay */
   content: {
     position: 'relative',
     zIndex: 1,
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center'
+    alignItems: 'center',
   },
 
-  /* ============================================================
-     🖼️ STEP 1: TOP IMAGE — FULL WIDTH + FULL HEIGHT
-     (Shown clearly at top, nothing above it)
-  ============================================================ */
   topImageWrap: {
     width: '100%',
     minHeight: '100vh',
@@ -364,25 +411,22 @@ const styles = {
     alignItems: 'center',
     background: 'transparent',
     padding: 0,
-    margin: 0
+    margin: 0,
   },
   topImage: {
     width: '100%',
     height: '100vh',
     maxHeight: '100vh',
     objectFit: 'contain',
-    display: 'block'
+    display: 'block',
   },
 
-  /* ============================================================
-     🏷️ STEP 2: EVENT NAME — transparent background
-  ============================================================ */
   headerSection: {
     width: '100%',
     maxWidth: '700px',
     textAlign: 'center',
     padding: '30px 20px 20px',
-    background: 'transparent'
+    background: 'transparent',
   },
   eventName: {
     margin: 0,
@@ -390,25 +434,22 @@ const styles = {
     fontWeight: 'bold',
     color: '#FFD700',
     letterSpacing: '0.5px',
-    textShadow: '0 3px 16px rgba(0,0,0,0.95), 0 0 24px rgba(212,160,23,0.5)'
+    textShadow: '0 3px 16px rgba(0,0,0,0.95), 0 0 24px rgba(212,160,23,0.5)',
   },
   eventLocation: {
     margin: '10px 0 0',
     fontSize: 'clamp(13px, 3.5vw, 16px)',
     color: '#ffe0b2',
     letterSpacing: '0.4px',
-    textShadow: '0 2px 10px rgba(0,0,0,0.95)'
+    textShadow: '0 2px 10px rgba(0,0,0,0.95)',
   },
 
-  /* ============================================================
-     ⏳ STEP 3: COUNTDOWN — transparent glass
-  ============================================================ */
   countdownSection: {
     width: '100%',
     maxWidth: '520px',
     textAlign: 'center',
     padding: '14px 20px 24px',
-    background: 'transparent'
+    background: 'transparent',
   },
   countdownLabel: {
     margin: '0 0 14px',
@@ -416,13 +457,13 @@ const styles = {
     fontWeight: 'bold',
     color: '#fff8e1',
     letterSpacing: '0.4px',
-    textShadow: '0 2px 8px rgba(0,0,0,0.85)'
+    textShadow: '0 2px 8px rgba(0,0,0,0.85)',
   },
   countdownGrid: {
     display: 'flex',
     justifyContent: 'center',
     gap: '10px',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   timeBlock: {
     background: 'rgba(183, 28, 28, 0.55)',
@@ -435,26 +476,23 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    boxShadow: '0 6px 18px rgba(0,0,0,0.35)'
+    boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
   },
   timeNum: {
     fontSize: 'clamp(20px, 5vw, 24px)',
     fontWeight: 'bold',
     color: '#FFD700',
     lineHeight: 1,
-    fontVariantNumeric: 'tabular-nums'
+    fontVariantNumeric: 'tabular-nums',
   },
   timeLabel: {
     fontSize: '10px',
     color: '#ffe0b2',
     textTransform: 'uppercase',
     letterSpacing: '1.2px',
-    marginTop: '5px'
+    marginTop: '5px',
   },
 
-  /* ============================================================
-     💎 STEP 4: GLASS FORM — transparent card
-  ============================================================ */
   glassCard: {
     width: '100%',
     maxWidth: '460px',
@@ -466,7 +504,7 @@ const styles = {
     borderRadius: '20px',
     padding: '26px 24px 28px',
     boxShadow:
-      '0 25px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.3)'
+      '0 25px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.3)',
   },
 
   formTitle: {
@@ -475,7 +513,7 @@ const styles = {
     color: '#fff8e1',
     textAlign: 'center',
     fontWeight: 'bold',
-    textShadow: '0 2px 10px rgba(0,0,0,0.85)'
+    textShadow: '0 2px 10px rgba(0,0,0,0.85)',
   },
   field: { marginBottom: '16px' },
   label: {
@@ -485,7 +523,7 @@ const styles = {
     fontWeight: '600',
     color: '#fff3e0',
     letterSpacing: '0.3px',
-    textShadow: '0 1px 5px rgba(0,0,0,0.8)'
+    textShadow: '0 1px 5px rgba(0,0,0,0.8)',
   },
   input: {
     width: '100%',
@@ -496,7 +534,7 @@ const styles = {
     background: 'rgba(255, 255, 255, 0.9)',
     color: '#3e2723',
     outline: 'none',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   payBtn: {
     width: '100%',
@@ -510,17 +548,16 @@ const styles = {
     fontWeight: 'bold',
     cursor: 'pointer',
     letterSpacing: '0.5px',
-    boxShadow: '0 8px 24px rgba(230, 81, 0, 0.6)'
+    boxShadow: '0 8px 24px rgba(230, 81, 0, 0.6)',
   },
   note: {
     margin: '14px 0 0',
     fontSize: '11.5px',
     color: '#ffe0b2',
     textAlign: 'center',
-    textShadow: '0 1px 5px rgba(0,0,0,0.8)'
+    textShadow: '0 1px 5px rgba(0,0,0,0.8)',
   },
 
-  /* Success */
   successBox: { textAlign: 'center' },
   successIcon: { fontSize: '44px', marginBottom: '4px' },
   successTitle: {
@@ -528,7 +565,7 @@ const styles = {
     fontSize: '21px',
     color: '#a5d6a7',
     fontWeight: 'bold',
-    textShadow: '0 2px 10px rgba(0,0,0,0.85)'
+    textShadow: '0 2px 10px rgba(0,0,0,0.85)',
   },
   detailCard: {
     background: 'rgba(255, 248, 240, 0.95)',
@@ -536,7 +573,7 @@ const styles = {
     borderRadius: '12px',
     padding: '14px 16px',
     marginBottom: '20px',
-    textAlign: 'left'
+    textAlign: 'left',
   },
   detailRow: {
     display: 'flex',
@@ -544,7 +581,7 @@ const styles = {
     alignItems: 'center',
     padding: '9px 0',
     borderBottom: '1px dashed #e0c9a6',
-    fontSize: '14px'
+    fontSize: '14px',
   },
   detailKey: { color: '#5d4037', fontWeight: '600' },
   detailVal: {
@@ -552,13 +589,13 @@ const styles = {
     fontWeight: '500',
     maxWidth: '60%',
     textAlign: 'right',
-    wordBreak: 'break-word'
+    wordBreak: 'break-word',
   },
   detailValHighlight: {
     color: '#b71c1c',
     fontWeight: 'bold',
     fontSize: '15px',
-    letterSpacing: '0.5px'
+    letterSpacing: '0.5px',
   },
   whatsappBtn: {
     display: 'block',
@@ -571,40 +608,39 @@ const styles = {
     fontSize: '16px',
     fontWeight: 'bold',
     boxShadow: '0 8px 24px rgba(37, 211, 102, 0.6)',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   blessing: {
     margin: '18px 0 0',
     fontSize: '13px',
     color: '#fff3e0',
     fontStyle: 'italic',
-    textShadow: '0 1px 6px rgba(0,0,0,0.85)'
+    textShadow: '0 1px 6px rgba(0,0,0,0.85)',
   },
 
-  /* Footer */
   footer: {
     width: '100%',
     textAlign: 'center',
     padding: '20px 16px 40px',
-    background: 'transparent'
+    background: 'transparent',
   },
   footerText: {
     margin: 0,
     fontSize: '13px',
     letterSpacing: '0.4px',
     color: '#ffe0b2',
-    textShadow: '0 1px 6px rgba(0,0,0,0.85)'
+    textShadow: '0 1px 6px rgba(0,0,0,0.85)',
   },
   footerLinks: {
     margin: '10px 0 0',
     fontSize: '12px',
     color: '#ffe0b2',
-    letterSpacing: '0.3px'
+    letterSpacing: '0.3px',
   },
   footerLink: {
     color: '#FFD700',
     textDecoration: 'underline',
-    textShadow: '0 1px 5px rgba(0,0,0,0.85)'
+    textShadow: '0 1px 5px rgba(0,0,0,0.85)',
   },
   footerSub: {
     margin: '6px 0 0',
@@ -612,6 +648,6 @@ const styles = {
     opacity: 0.75,
     letterSpacing: '2px',
     textTransform: 'uppercase',
-    color: '#ffe0b2'
-  }
+    color: '#ffe0b2',
+  },
 };
