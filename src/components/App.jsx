@@ -1,18 +1,39 @@
-import ganeshImg from '../assets/ganesh.jpeg';
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import ganeshImg from '../assets/ganesh.jpeg';
 
 const API_BASE = 'https://ganesh-ikqb.onrender.com';
 
-// ⚠️ Change to "production" when you go live (must match backend CASHFREE_ENV)
-const CASHFREE_MODE = 'sandbox';
+// ============================================================
+// BUSINESS / EVENT CONSTANTS — edit these in one place
+// ============================================================
+const ORG = {
+  name: 'Gaddiannaram Utsav Samithi',
+  entityType: 'Registered Festival Committee (Mandap Committee)',
+  address: 'Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060, India',
+  email: 'bluxury1000@gmail.com',
+  phone: '+91 7893828468',
+  festival: 'Vinayak Ganesh Chaturthi 2026',
+  venue:
+    'Gaddiannaram Utsav Samithi Pandal, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
+  counterTimings: '8:00 AM – 9:00 PM (all festival days)',
+};
 
+// ============================================================
+// MAIN APP
+// ============================================================
 export default function App() {
+  // Current page: 'booking' | 'about' | 'terms' | 'refund' | 'privacy' | 'shipping' | 'contact'
+  const [page, setPage] = useState('booking');
+
+  // Booking form state
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [whatsappUrl, setWhatsappUrl] = useState('');
-  const [confirmedToken, setConfirmedToken] = useState(null);
+  const [confirmedPass, setConfirmedPass] = useState(null);
+
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -20,18 +41,17 @@ export default function App() {
     seconds: 0,
   });
 
-  // 🎯 DRAW DATE: 25th at 1:00 PM (month 8 = September)
-  const DRAW_DATE = new Date(new Date().getFullYear(), 8, 25, 13, 0, 0);
+  const COLLECTION_DATE = new Date(new Date().getFullYear(), 8, 25, 13, 0, 0);
 
-  // 🔥 Warm up the backend on page load (fixes Render cold starts)
+  // Warm up backend
   useEffect(() => {
-    fetch(`${API_BASE}/`).catch(() => {});
+    axios.get(`${API_BASE}/`).catch(() => {});
   }, []);
 
-  // ⏳ Countdown
+  // Countdown
   useEffect(() => {
     const tick = () => {
-      const distance = DRAW_DATE.getTime() - new Date().getTime();
+      const distance = COLLECTION_DATE.getTime() - new Date().getTime();
       if (distance < 0) {
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
@@ -46,160 +66,103 @@ export default function App() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ⏱️ Fetch with timeout helper
-  const fetchWithTimeout = (url, opts = {}, ms = 30000) =>
-    Promise.race([
-      fetch(url, opts),
-      new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('Request timed out')), ms)
-      ),
-    ]);
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  // 🔁 Retry wrapper for cold-start resilience
-  const createOrderWithRetry = async (body, attempts = 3) => {
-    let lastErr;
-    for (let i = 0; i < attempts; i++) {
-      try {
-        const res = await fetchWithTimeout(
-          `${API_BASE}/api/token/create`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          },
-          30000
-        );
-        const json = await res.json().catch(() => ({}));
-        if (res.ok && json.success) return json;
-        lastErr = new Error(
-          json.error || json.message || `Server ${res.status}`
-        );
-      } catch (err) {
-        lastErr = err;
-      }
-      if (i < attempts - 1) await sleep(3000);
-    }
-    throw lastErr || new Error('Backend unreachable');
-  };
-
-  // 🔁 Poll the backend until Cashfree confirms the order is PAID
-  const verifyPaymentWithRetry = async (orderId, tokenNo, attempts = 6) => {
-    let lastResult = {
-      success: false,
-      message: 'Payment not confirmed yet. Please try again in a minute.',
-    };
-
-    for (let i = 0; i < attempts; i++) {
-      try {
-        const res = await fetchWithTimeout(
-          `${API_BASE}/api/payment/verify`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId, tokenNo }),
-          },
-          30000
-        );
-        const json = await res.json().catch(() => ({}));
-
-        if (json.success) return json;
-
-        lastResult = json;
-        if (!json.pending) return json; // hard failure — stop retrying
-      } catch (err) {
-        lastResult = { success: false, message: err.message };
-      }
-      if (i < attempts - 1) await sleep(2500);
-    }
-    return lastResult;
-  };
-
-  // 📦 Load Cashfree JS SDK v3
-  const loadCashfreeScript = () =>
+  // Load Razorpay SDK
+  const loadRazorpayScript = () =>
     new Promise((resolve) => {
-      if (window.Cashfree) return resolve(true);
-      const existing = document.querySelector(
-        'script[src="https://sdk.cashfree.com/js/v3/cashfree.js"]'
-      );
-      if (existing) {
-        existing.addEventListener('load', () => resolve(true));
-        existing.addEventListener('error', () => resolve(false));
-        return;
-      }
+      if (window.Razorpay) return resolve(true);
       const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
-      setTimeout(() => resolve(false), 10000);
     });
 
-  // 🚀 MAIN SUBMIT HANDLER
+  // Payment handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    const isLoaded = await loadCashfreeScript();
+    const isLoaded = await loadRazorpayScript();
     if (!isLoaded) {
-      alert('Failed to load payment gateway. Check your internet and try again.');
+      alert('Failed to load Razorpay SDK. Check your internet and try again.');
       setLoading(false);
       return;
     }
 
     try {
-      const data = await createOrderWithRetry({ name, phone });
+      const { data } = await axios.post(`${API_BASE}/api/pass/create`, {
+        name,
+        phone,
+      });
 
-      const cashfree = window.Cashfree({ mode: CASHFREE_MODE });
+      if (!data.success) throw new Error(data.error || 'Order creation failed');
 
-      const checkoutOptions = {
-        paymentSessionId: data.paymentSessionId,
-        redirectTarget: '_modal',
+      const options = {
+        key: data.key_id,
+        amount: data.amount,
+        currency: data.currency,
+        name: ORG.name,
+        description: 'Laddu Prasad Pass Booking',
+        order_id: data.order_id,
+        prefill: { name, contact: phone },
+        theme: { color: '#b71c1c' },
+        handler: async function (response) {
+          try {
+            const verifyRes = await axios.post(`${API_BASE}/api/pass/verify`, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              passNo: data.passNo,
+            });
+
+            if (verifyRes.data.success) {
+              setIsPaid(true);
+              setWhatsappUrl(verifyRes.data.whatsappUrl);
+              setConfirmedPass(verifyRes.data.passDetails);
+            } else {
+              alert(
+                'Payment verification failed: ' +
+                  (verifyRes.data.message || 'unknown')
+              );
+            }
+          } catch (err) {
+            console.error('Verification error:', err);
+            alert(
+              'Payment verification error. Please contact support with Payment ID: ' +
+                response.razorpay_payment_id
+            );
+          } finally {
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+            alert('Payment window closed. You can try again when ready.');
+          },
+        },
       };
 
-      cashfree
-        .checkout(checkoutOptions)
-        .then(async (result) => {
-          // User closed the modal without paying
-          if (result && result.error) {
-            console.warn('Checkout closed / error:', result.error);
-          }
-
-          // Always verify server-side — never trust the browser result
-          const verifyData = await verifyPaymentWithRetry(
-            data.orderId,
-            data.tokenNo
-          );
-
-          if (verifyData.success) {
-            setIsPaid(true);
-            setWhatsappUrl(verifyData.whatsappUrl);
-            setConfirmedToken(verifyData.tokenDetails);
-          } else {
-            alert(
-              'Payment verification failed: ' +
-                (verifyData.message || verifyData.error || 'unknown')
-            );
-          }
-        })
-        .catch((err) => {
-          console.error('CASHFREE CHECKOUT ERROR:', err);
-          alert('Payment error: ' + (err?.message || 'unknown'));
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (err) {
       console.error('PAYMENT ERROR:', err);
-      alert('Payment error: ' + (err.message || 'unknown'));
+      alert('Payment error: ' + (err.response?.data?.error || err.message));
       setLoading(false);
     }
   };
 
+  // Navigate to a policy page and scroll to top
+  const goTo = (p) => {
+    setPage(p);
+    window.scrollTo(0, 0);
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div
       style={{
@@ -207,170 +170,484 @@ export default function App() {
         backgroundImage: `url(${ganeshImg})`,
       }}
     >
-      {/* Dark overlay to keep text readable over image */}
       <div style={styles.bgOverlay} />
 
-      {/* ============ CONTENT ============ */}
       <div style={styles.content}>
-        {/* 🖼️ STEP 1: TOP IMAGE — FULL WIDTH + FULL HEIGHT */}
-        <div style={styles.topImageWrap}>
-          <img src={ganeshImg} alt="Ganesh Idol" style={styles.topImage} />
-        </div>
-
-        {/* 🏷️ STEP 2: EVENT NAME BELOW IMAGE (transparent bg) */}
-        <div style={styles.headerSection}>
-          <h1 style={styles.eventName}>🪔 Gaddiannaram Utsav Samithi 🪔</h1>
-          <p style={styles.eventLocation}>
-            📍 Gaddiannaram, Dilsukhnagar, Hyderabad
-          </p>
-        </div>
-
-        {/* ⏳ STEP 3: COUNTDOWN (transparent glass) */}
-        <div style={styles.countdownSection}>
-          <p style={styles.countdownLabel}>🎯 Draw Date: 25th at 1:00 PM</p>
-          <div style={styles.countdownGrid}>
-            <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>{timeLeft.days}</span>
-              <span style={styles.timeLabel}>Days</span>
-            </div>
-            <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>
-                {String(timeLeft.hours).padStart(2, '0')}
-              </span>
-              <span style={styles.timeLabel}>Hours</span>
-            </div>
-            <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>
-                {String(timeLeft.minutes).padStart(2, '0')}
-              </span>
-              <span style={styles.timeLabel}>Min</span>
-            </div>
-            <div style={styles.timeBlock}>
-              <span style={styles.timeNum}>
-                {String(timeLeft.seconds).padStart(2, '0')}
-              </span>
-              <span style={styles.timeLabel}>Sec</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 💎 STEP 4: GLASS FORM (transparent) */}
-        <div style={styles.glassCard}>
-          {!isPaid ? (
-            <form onSubmit={handleSubmit}>
-              <h2 style={styles.formTitle}>🎟️ Book Your Token</h2>
-
-              <div style={styles.field}>
-                <label style={styles.label}>Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  style={styles.input}
-                />
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  pattern="[0-9]{10}"
-                  maxLength="10"
-                  value={phone}
-                  onChange={(e) =>
-                    setPhone(e.target.value.replace(/\D/g, ''))
-                  }
-                  placeholder="10-digit mobile number"
-                  style={styles.input}
-                />
-              </div>
-
-              <button type="submit" disabled={loading} style={styles.payBtn}>
-                {loading ? '⏳ Processing...' : '💰 Pay ₹20 & Get Token'}
-              </button>
-
-              <p style={styles.note}>🔒 Secure payment via Cashfree</p>
-            </form>
-          ) : (
-            <div style={styles.successBox}>
-              <div style={styles.successIcon}>✅</div>
-              <h2 style={styles.successTitle}>Payment Successful!</h2>
-
-              <div style={styles.detailCard}>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailKey}>Devotee</span>
-                  <span style={styles.detailVal}>{confirmedToken.name}</span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailKey}>Token No</span>
-                  <span style={styles.detailValHighlight}>
-                    {confirmedToken.tokenNo}
-                  </span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailKey}>Phone</span>
-                  <span style={styles.detailVal}>{confirmedToken.phone}</span>
-                </div>
-                <div style={styles.detailRow}>
-                  <span style={styles.detailKey}>Amount Paid</span>
-                  <span style={styles.detailVal}>₹20</span>
-                </div>
-              </div>
-
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.whatsappBtn}
-              >
-                📲 Send Token on WhatsApp
-              </a>
-
-              <p style={styles.blessing}>
-                🙏 Blessings to you and your family 🙏
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <footer style={styles.footer}>
-          <p style={styles.footerText}>
-            🪔 Gaddiannaram Utsav Samithi • Dilsukhnagar, Hyderabad 🪔
-          </p>
-
-          <p style={styles.footerLinks}>
-            <a href="/policies.html" style={styles.footerLink}>
-              Terms &amp; Conditions
-            </a>
-            {' • '}
-            <a href="/policies.html" style={styles.footerLink}>
-              Privacy Policy
-            </a>
-            {' • '}
-            <a href="/policies.html" style={styles.footerLink}>
-              Refund Policy
-            </a>
-            {' • '}
-            <a href="/policies.html" style={styles.footerLink}>
-              Contact Us
-            </a>
-          </p>
-
-          <p style={styles.footerSub}>Ganesh Chaturthi 2026</p>
-        </footer>
+        {page === 'booking' ? (
+          <BookingPage
+            name={name}
+            setName={setName}
+            phone={phone}
+            setPhone={setPhone}
+            loading={loading}
+            isPaid={isPaid}
+            whatsappUrl={whatsappUrl}
+            confirmedPass={confirmedPass}
+            handleSubmit={handleSubmit}
+            timeLeft={timeLeft}
+            goTo={goTo}
+          />
+        ) : (
+          <PolicyPage page={page} goTo={goTo} />
+        )}
       </div>
     </div>
   );
 }
 
-/* ============================================================
-   🎨 STYLES
-   ============================================================ */
+// ============================================================
+// BOOKING PAGE
+// ============================================================
+function BookingPage({
+  name,
+  setName,
+  phone,
+  setPhone,
+  loading,
+  isPaid,
+  whatsappUrl,
+  confirmedPass,
+  handleSubmit,
+  timeLeft,
+  goTo,
+}) {
+  return (
+    <>
+      <div style={styles.topImageWrap}>
+        <img src={ganeshImg} alt="Ganesh Idol" style={styles.topImage} />
+      </div>
+
+      <div style={styles.headerSection}>
+        <h1 style={styles.eventName}>🪔 {ORG.name} 🪔</h1>
+        <p style={styles.eventLocation}>📍 Gaddiannaram, Dilsukhnagar, Hyderabad</p>
+      </div>
+
+      <div style={styles.countdownSection}>
+        <p style={styles.countdownLabel}>
+          🎯 Laddu Collection Starts: 25th at 1:00 PM
+        </p>
+        <div style={styles.countdownGrid}>
+          <TimeBlock num={timeLeft.days} label="Days" />
+          <TimeBlock num={String(timeLeft.hours).padStart(2, '0')} label="Hours" />
+          <TimeBlock num={String(timeLeft.minutes).padStart(2, '0')} label="Min" />
+          <TimeBlock num={String(timeLeft.seconds).padStart(2, '0')} label="Sec" />
+        </div>
+      </div>
+
+      <div style={styles.glassCard}>
+        {!isPaid ? (
+          <form onSubmit={handleSubmit}>
+            <h2 style={styles.formTitle}>🎟️ Book Your Laddu Prasad Pass</h2>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Full Name</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Phone Number</label>
+              <input
+                type="tel"
+                required
+                pattern="[0-9]{10}"
+                maxLength="10"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="10-digit mobile number"
+                style={styles.input}
+              />
+            </div>
+
+            <button type="submit" disabled={loading} style={styles.payBtn}>
+              {loading ? '⏳ Processing...' : '💰 Pay ₹20 & Get Pass'}
+            </button>
+
+            <p style={styles.note}>🔒 Secure payment via Razorpay</p>
+          </form>
+        ) : (
+          <div style={styles.successBox}>
+            <div style={styles.successIcon}>✅</div>
+            <h2 style={styles.successTitle}>Booking Successful!</h2>
+
+            <div style={styles.detailCard}>
+              <DetailRow label="Devotee" value={confirmedPass.name} />
+              <DetailRow
+                label="Pass No"
+                value={confirmedPass.passNo}
+                highlight
+              />
+              <DetailRow label="Phone" value={confirmedPass.phone} />
+              <DetailRow label="Amount Paid" value="₹20" />
+            </div>
+
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.whatsappBtn}
+            >
+              📲 Send Pass on WhatsApp
+            </a>
+
+            <p style={styles.blessing}>🙏 Blessings to you and your family 🙏</p>
+          </div>
+        )}
+      </div>
+
+      <Footer goTo={goTo} />
+    </>
+  );
+}
+
+// ============================================================
+// SMALL REUSABLE COMPONENTS
+// ============================================================
+function TimeBlock({ num, label }) {
+  return (
+    <div style={styles.timeBlock}>
+      <span style={styles.timeNum}>{num}</span>
+      <span style={styles.timeLabel}>{label}</span>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, highlight }) {
+  return (
+    <div style={styles.detailRow}>
+      <span style={styles.detailKey}>{label}</span>
+      <span style={highlight ? styles.detailValHighlight : styles.detailVal}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ============================================================
+// FOOTER with policy links
+// ============================================================
+function Footer({ goTo }) {
+  const links = [
+    { key: 'about', label: 'About Us' },
+    { key: 'terms', label: 'Terms & Conditions' },
+    { key: 'refund', label: 'Refund Policy' },
+    { key: 'privacy', label: 'Privacy Policy' },
+    { key: 'shipping', label: 'Delivery Policy' },
+    { key: 'contact', label: 'Contact Us' },
+  ];
+
+  return (
+    <footer style={styles.footer}>
+      <p style={styles.footerText}>🪔 {ORG.name} • Dilsukhnagar, Hyderabad 🪔</p>
+      <p style={styles.footerLinks}>
+        {links.map((l, i) => (
+          <React.Fragment key={l.key}>
+            <span style={styles.footerLink} onClick={() => goTo(l.key)}>
+              {l.label}
+            </span>
+            {i < links.length - 1 && ' • '}
+          </React.Fragment>
+        ))}
+      </p>
+      <p style={styles.footerSub}>Ganesh Chaturthi 2026</p>
+    </footer>
+  );
+}
+
+// ============================================================
+// POLICY PAGE WRAPPER
+// ============================================================
+function PolicyPage({ page, goTo }) {
+  const nav = [
+    { key: 'about', label: 'About Us' },
+    { key: 'terms', label: 'Terms & Conditions' },
+    { key: 'refund', label: 'Refund Policy' },
+    { key: 'privacy', label: 'Privacy Policy' },
+    { key: 'shipping', label: 'Delivery Policy' },
+    { key: 'contact', label: 'Contact Us' },
+  ];
+
+  return (
+    <div style={styles.policyContainer}>
+      <span style={styles.backLink} onClick={() => goTo('booking')}>
+        ← Back to Booking
+      </span>
+
+      <nav style={styles.policyNav}>
+        {nav.map((n, i) => (
+          <React.Fragment key={n.key}>
+            <span
+              style={{
+                ...styles.policyNavLink,
+                ...(page === n.key ? styles.policyNavActive : {}),
+              }}
+              onClick={() => goTo(n.key)}
+            >
+              {n.label}
+            </span>
+            {i < nav.length - 1 && ' | '}
+          </React.Fragment>
+        ))}
+      </nav>
+
+      {page === 'about' && <AboutContent />}
+      {page === 'terms' && <TermsContent />}
+      {page === 'refund' && <RefundContent />}
+      {page === 'privacy' && <PrivacyContent />}
+      {page === 'shipping' && <ShippingContent />}
+      {page === 'contact' && <ContactContent />}
+
+      <p style={styles.policyFooter}>
+        Ganesh Chaturthi 2026 · © {ORG.name} · {ORG.address}
+      </p>
+    </div>
+  );
+}
+
+// ============================================================
+// POLICY CONTENT SECTIONS
+// ============================================================
+function AboutContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>About Us &amp; Event Details</h1>
+      <div style={styles.policyCard}>
+        <p>
+          <strong>Organisation Name:</strong> {ORG.name}
+          <br />
+          <strong>Entity Type:</strong> {ORG.entityType}
+          <br />
+          <strong>Address:</strong> {ORG.address}
+          <br />
+          <strong>Email:</strong> {ORG.email}
+          <br />
+          <strong>Phone:</strong> {ORG.phone}
+        </p>
+      </div>
+
+      <h2 style={styles.policyH2}>Who We Are</h2>
+      <p>
+        {ORG.name} is a community festival committee that organises the annual
+        Vinayak Ganesh Chaturthi celebrations at Gaddiannaram, Dilsukhnagar,
+        Hyderabad. The committee manages the pandal, daily pooja schedule,
+        prasadam distribution and cultural programmes for the duration of the
+        festival.
+      </p>
+
+      <h2 style={styles.policyH2}>About the Laddu Prasad Pass</h2>
+      <p>
+        During the festival we prepare a limited quantity of <strong>Laddu Prasad</strong>{' '}
+        for distribution at the pandal counter. To help us plan quantities
+        accurately and avoid crowding, devotees can reserve their Laddu Prasad
+        in advance by booking a <strong>Festival Laddu Booking Ticket (Laddu
+        Prasad Pass)</strong> for <strong>₹20</strong> per pass.
+      </p>
+      <ul>
+        <li>
+          Each pass entitles the holder to collect <strong>one Laddu Prasad</strong>{' '}
+          at the Vinayak Chaturthi Pandal / Event counter.
+        </li>
+        <li>
+          The pass is issued digitally as a pass number and delivered on
+          WhatsApp instantly after payment is confirmed.
+        </li>
+        <li>
+          The pass is valid only for the current festival duration and is
+          non-transferable.
+        </li>
+      </ul>
+
+      <h2 style={styles.policyH2}>Event Details</h2>
+      <div style={styles.policyCard}>
+        <p>
+          <strong>Festival:</strong> {ORG.festival}
+          <br />
+          <strong>Venue:</strong> {ORG.venue}
+          <br />
+          <strong>Prasadam Counter Timings:</strong> {ORG.counterTimings}
+          <br />
+          <strong>Pass Booking:</strong> Open online through this website
+        </p>
+      </div>
+
+      <h2 style={styles.policyH2}>Our Service</h2>
+      <p>
+        This website is a booking and reservation service for the Laddu Prasad
+        distribution conducted by the committee. It is not a financial product,
+        investment product, gift card or loyalty programme of any kind. All
+        payments are collected solely as a festival prasadam booking fee.
+      </p>
+
+      <h2 style={styles.policyH2}>Payments</h2>
+      <p>
+        All online payments on this website are processed securely through our
+        payment gateway partner <strong>Razorpay</strong>. We do not store your
+        card, UPI or bank account details on our servers.
+      </p>
+    </>
+  );
+}
+
+function TermsContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>Terms &amp; Conditions</h1>
+      <p>
+        By booking a Laddu Prasad on this website, you agree to the following
+        terms:
+      </p>
+      <ul>
+        <li>The pre-booking fee is ₹20 per Laddu Prasad.</li>
+        <li>
+          Each successful payment guarantees one Laddu Prasad to be collected
+          at the Vinayak Chaturthi Pandal counter during the festival.
+        </li>
+        <li>
+          The booking confirmation (Pass No) will be sent to your WhatsApp
+          number after payment verification.
+        </li>
+        <li>
+          The pass is non-transferable. Duplicate or tampered confirmations
+          will be rejected.
+        </li>
+        <li>
+          The Laddu Prasad must be collected in person during the festival. No
+          shipping is provided.
+        </li>
+        <li>The organiser's decision regarding the distribution is final.</li>
+        <li>
+          Any misuse, fraudulent payment, or attempt to manipulate the system
+          will result in cancellation without refund.
+        </li>
+      </ul>
+    </>
+  );
+}
+
+function RefundContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>Refund &amp; Cancellation Policy</h1>
+      <ul>
+        <li>
+          The ₹20 pre-booking fee is <strong>non-refundable</strong> once
+          payment is successful.
+        </li>
+        <li>
+          If a payment is deducted but the booking is not generated due to a
+          technical failure on our side, contact us within 24 hours with your
+          Razorpay Payment ID and we will process a full refund.
+        </li>
+        <li>
+          Refunds, when applicable, are processed within 5–7 business days to
+          the original payment method.
+        </li>
+        <li>
+          For refund requests, email {ORG.email} or call {ORG.phone}.
+        </li>
+      </ul>
+    </>
+  );
+}
+
+function PrivacyContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>Privacy Policy</h1>
+      <p>
+        We collect only the information you provide:{' '}
+        <strong>your name and mobile number</strong>.
+      </p>
+      <ul>
+        <li>
+          This information is used solely to generate your booking and send
+          confirmation via WhatsApp.
+        </li>
+        <li>
+          We do not sell, share, or rent your personal data to any third party.
+        </li>
+        <li>
+          Payment information is processed securely by Razorpay. We do not
+          store your card, UPI, or bank details.
+        </li>
+        <li>
+          Data is stored securely and retained only for the duration of this
+          event.
+        </li>
+        <li>
+          To request deletion of your data, email us at {ORG.email}.
+        </li>
+      </ul>
+    </>
+  );
+}
+
+function ShippingContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>Delivery Policy</h1>
+      <p>
+        This is a <strong>pre-booking for a physical product (Laddu Prasad)</strong>.
+      </p>
+      <ul>
+        <li>
+          No shipping is provided. The Laddu Prasad must be collected in person
+          at the {ORG.name} Pandal counter during the festival.
+        </li>
+        <li>
+          Your pass number (Pass No) is delivered instantly via WhatsApp after
+          successful payment verification.
+        </li>
+        <li>
+          Show the WhatsApp confirmation at the pandal counter to collect your
+          Laddu Prasad.
+        </li>
+        <li>
+          If you do not receive the WhatsApp message within 30 minutes of
+          payment, contact us at {ORG.email} or {ORG.phone}.
+        </li>
+      </ul>
+    </>
+  );
+}
+
+function ContactContent() {
+  return (
+    <>
+      <h1 style={styles.policyH1}>Contact Us</h1>
+      <div style={styles.policyCard}>
+        <p>
+          <strong>{ORG.name}</strong>
+          <br />
+          Gaddiannaram, Dilsukhnagar,
+          <br />
+          Hyderabad, Telangana 500060, India
+          <br />
+          📧 {ORG.email}
+          <br />
+          📞 {ORG.phone}
+        </p>
+      </div>
+      <p>
+        For any queries regarding your Laddu Prasad booking, refunds, or
+        delivery, please contact us using the details above. We aim to respond
+        within 24 hours.
+      </p>
+    </>
+  );
+}
+
+// ============================================================
+// STYLES
+// ============================================================
 const styles = {
+  // -------- Root layout --------
   root: {
     position: 'relative',
     minHeight: '100vh',
@@ -384,7 +661,6 @@ const styles = {
     backgroundAttachment: 'fixed',
     overflowX: 'hidden',
   },
-
   bgOverlay: {
     position: 'fixed',
     inset: 0,
@@ -393,7 +669,6 @@ const styles = {
     zIndex: 0,
     pointerEvents: 'none',
   },
-
   content: {
     position: 'relative',
     zIndex: 1,
@@ -403,6 +678,7 @@ const styles = {
     alignItems: 'center',
   },
 
+  // -------- Top image --------
   topImageWrap: {
     width: '100%',
     minHeight: '100vh',
@@ -421,12 +697,12 @@ const styles = {
     display: 'block',
   },
 
+  // -------- Header --------
   headerSection: {
     width: '100%',
     maxWidth: '700px',
     textAlign: 'center',
     padding: '30px 20px 20px',
-    background: 'transparent',
   },
   eventName: {
     margin: 0,
@@ -444,12 +720,12 @@ const styles = {
     textShadow: '0 2px 10px rgba(0,0,0,0.95)',
   },
 
+  // -------- Countdown --------
   countdownSection: {
     width: '100%',
     maxWidth: '520px',
     textAlign: 'center',
     padding: '14px 20px 24px',
-    background: 'transparent',
   },
   countdownLabel: {
     margin: '0 0 14px',
@@ -493,6 +769,7 @@ const styles = {
     marginTop: '5px',
   },
 
+  // -------- Glass form card --------
   glassCard: {
     width: '100%',
     maxWidth: '460px',
@@ -505,8 +782,8 @@ const styles = {
     padding: '26px 24px 28px',
     boxShadow:
       '0 25px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.3)',
+    boxSizing: 'border-box',
   },
-
   formTitle: {
     margin: '0 0 20px',
     fontSize: '20px',
@@ -558,6 +835,7 @@ const styles = {
     textShadow: '0 1px 5px rgba(0,0,0,0.8)',
   },
 
+  // -------- Success --------
   successBox: { textAlign: 'center' },
   successIcon: { fontSize: '44px', marginBottom: '4px' },
   successTitle: {
@@ -618,11 +896,11 @@ const styles = {
     textShadow: '0 1px 6px rgba(0,0,0,0.85)',
   },
 
+  // -------- Footer --------
   footer: {
     width: '100%',
     textAlign: 'center',
     padding: '20px 16px 40px',
-    background: 'transparent',
   },
   footerText: {
     margin: 0,
@@ -640,6 +918,7 @@ const styles = {
   footerLink: {
     color: '#FFD700',
     textDecoration: 'underline',
+    cursor: 'pointer',
     textShadow: '0 1px 5px rgba(0,0,0,0.85)',
   },
   footerSub: {
@@ -649,5 +928,67 @@ const styles = {
     letterSpacing: '2px',
     textTransform: 'uppercase',
     color: '#ffe0b2',
+  },
+
+  // -------- Policy pages --------
+  policyContainer: {
+    width: '100%',
+    maxWidth: '800px',
+    margin: '40px auto 80px',
+    padding: '26px 24px 34px',
+    background: '#fffaf3',
+    borderRadius: '16px',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+    color: '#2b2b2b',
+    lineHeight: 1.6,
+    boxSizing: 'border-box',
+  },
+  backLink: {
+    display: 'inline-block',
+    marginBottom: '18px',
+    color: '#b71c1c',
+    cursor: 'pointer',
+    fontWeight: '600',
+    textDecoration: 'none',
+  },
+  policyNav: {
+    marginBottom: '22px',
+    paddingBottom: '14px',
+    borderBottom: '2px solid #ffe0b2',
+    fontSize: '14px',
+  },
+  policyNavLink: {
+    color: '#b71c1c',
+    cursor: 'pointer',
+    margin: '0 2px',
+    textDecoration: 'none',
+  },
+  policyNavActive: {
+    fontWeight: 'bold',
+    textDecoration: 'underline',
+  },
+  policyH1: {
+    color: '#b71c1c',
+    marginTop: 0,
+    fontSize: '26px',
+  },
+  policyH2: {
+    color: '#e65100',
+    marginTop: '30px',
+    borderBottom: '2px solid #ffe0b2',
+    paddingBottom: '6px',
+    fontSize: '20px',
+  },
+  policyCard: {
+    background: '#fff',
+    border: '1px solid #ffe0b2',
+    borderRadius: '8px',
+    padding: '14px 18px',
+    margin: '16px 0',
+  },
+  policyFooter: {
+    marginTop: '40px',
+    fontSize: '13px',
+    color: '#666',
   },
 };
