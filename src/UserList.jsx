@@ -12,7 +12,7 @@ const ORG = {
 };
 
 export default function UserList() {
-  const [passes, setPasses] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,11 +23,11 @@ export default function UserList() {
     setLoading(true);
     setError('');
     try {
-      const [passRes, statRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/admin/passes`),
+      const [orderRes, statRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/admin/orders`),
         axios.get(`${API_BASE}/api/admin/stats`),
       ]);
-      if (passRes.data.success) setPasses(passRes.data.passes || []);
+      if (orderRes.data.success) setOrders(orderRes.data.orders || []);
       if (statRes.data.success) setStats(statRes.data.stats);
     } catch (err) {
       console.error('UserList fetch error:', err);
@@ -46,16 +46,16 @@ export default function UserList() {
     fetchData();
   }, []);
 
-  const filtered = passes
-    .filter((p) => (filter === 'ALL' ? true : p.status === filter))
-    .filter((p) => {
+  const filtered = orders
+    .filter((o) => (filter === 'ALL' ? true : o.status === filter))
+    .filter((o) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
-        p.name?.toLowerCase().includes(q) ||
-        p.phone?.includes(q) ||
-        p.passNo?.toLowerCase().includes(q) ||
-        p.paymentId?.toLowerCase().includes(q)
+        o.name?.toLowerCase().includes(q) ||
+        o.phone?.includes(q) ||
+        o.orderNo?.toLowerCase().includes(q) ||
+        o.paymentId?.toLowerCase().includes(q)
       );
     });
 
@@ -66,20 +66,20 @@ export default function UserList() {
   };
 
   const downloadCSV = () => {
-    const header = 'PassNo,Name,Phone,Status,PaymentId,OrderId,CreatedAt\n';
+    const header = 'OrderNo,Name,Phone,Status,PaymentId,RazorpayOrderId,CreatedAt\n';
     const rows = filtered
       .map(
-        (p) =>
-          `${p.passNo},"${p.name}",${p.phone},${p.status},${
-            p.paymentId || ''
-          },${p.orderId},${new Date(p.createdAt).toISOString()}`
+        (o) =>
+          `${o.orderNo},"${o.name}",${o.phone},${o.status},${
+            o.paymentId || ''
+          },${o.razorpayOrderId},${new Date(o.createdAt).toISOString()}`
       )
       .join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `laddu-passes-${Date.now()}.csv`;
+    a.download = `laddu-orders-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -93,7 +93,7 @@ export default function UserList() {
 
       <div style={s.content}>
         <div style={s.header}>
-          <h1 style={s.title}>🪔 Booking List 🪔</h1>
+          <h1 style={s.title}>🪔 Order List 🪔</h1>
           <p style={s.subtitle}>
             {ORG.name} · {ORG.festival}
           </p>
@@ -107,7 +107,7 @@ export default function UserList() {
             ⬇️ Download CSV
           </button>
           <button onClick={goHome} style={s.homeBtn}>
-            ← Back to Booking
+            ← Back to Shop
           </button>
         </div>
 
@@ -141,7 +141,7 @@ export default function UserList() {
           </div>
           <input
             type="text"
-            placeholder="Search name / phone / pass / payment"
+            placeholder="Search name / phone / order / payment"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={s.searchInput}
@@ -149,17 +149,17 @@ export default function UserList() {
         </div>
 
         <div style={s.tableCard}>
-          {loading && passes.length === 0 ? (
-            <p style={s.empty}>Loading bookings…</p>
+          {loading && orders.length === 0 ? (
+            <p style={s.empty}>Loading orders…</p>
           ) : filtered.length === 0 ? (
-            <p style={s.empty}>No bookings found</p>
+            <p style={s.empty}>No orders found</p>
           ) : (
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
                   <tr>
                     <th style={s.th}>#</th>
-                    <th style={s.th}>Pass No</th>
+                    <th style={s.th}>Order No</th>
                     <th style={s.th}>Name</th>
                     <th style={s.th}>Phone</th>
                     <th style={s.th}>Status</th>
@@ -168,31 +168,31 @@ export default function UserList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p, i) => (
-                    <tr key={p._id} style={s.tr}>
+                  {filtered.map((o, i) => (
+                    <tr key={o._id} style={s.tr}>
                       <td style={s.td}>{i + 1}</td>
-                      <td style={{ ...s.td, ...s.mono }}>{p.passNo}</td>
-                      <td style={s.td}>{p.name}</td>
-                      <td style={s.td}>{p.phone}</td>
+                      <td style={{ ...s.td, ...s.mono }}>{o.orderNo}</td>
+                      <td style={s.td}>{o.name}</td>
+                      <td style={s.td}>{o.phone}</td>
                       <td
                         style={{
                           ...s.td,
                           fontWeight: 'bold',
                           color:
-                            p.status === 'SUCCESS'
+                            o.status === 'SUCCESS'
                               ? '#4ade80'
-                              : p.status === 'PENDING'
+                              : o.status === 'PENDING'
                               ? '#fbbf24'
                               : '#f87171',
                         }}
                       >
-                        {p.status}
+                        {o.status}
                       </td>
                       <td style={{ ...s.td, ...s.mono }}>
-                        {p.paymentId || '—'}
+                        {o.paymentId || '—'}
                       </td>
                       <td style={s.td}>
-                        {new Date(p.createdAt).toLocaleString()}
+                        {new Date(o.createdAt).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -203,7 +203,7 @@ export default function UserList() {
         </div>
 
         <p style={s.footerNote}>
-          Showing {filtered.length} of {passes.length} bookings · 📞{' '}
+          Showing {filtered.length} of {orders.length} orders · 📞{' '}
           {ORG.phone} · ✉️ {ORG.email}
         </p>
 

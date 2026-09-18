@@ -11,7 +11,8 @@ const ORG = {
   email: 'bluxury1000@gmail.com',
   phone: '+91 7893828468',
   festival: 'Ganesh Chaturthi 2026 – Prasadam Distribution',
-  venue: 'Gaddiannaram Utsav Samithi Prasadam Counter, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
+  venue:
+    'Gaddiannaram Utsav Samithi Prasadam Counter, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
   counterTimings: '8:00 AM – 9:00 PM (all festival days)',
 };
 
@@ -35,7 +36,7 @@ export default function App() {
 
   // Warm up backend
   useEffect(() => {
-    axios.get(`${API_BASE}/`).catch(() => { });
+    axios.get(`${API_BASE}/`).catch(() => {});
   }, []);
 
   // Countdown timer
@@ -48,7 +49,9 @@ export default function App() {
       }
       setTimeLeft({
         days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        hours: Math.floor(
+          (distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+        ),
         minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
         seconds: Math.floor((distance % (1000 * 60)) / 1000),
       });
@@ -82,7 +85,8 @@ export default function App() {
     }
 
     try {
-      const { data } = await axios.post(`${API_BASE}/api/pass/create`, {
+      // ✅ CHANGED: /api/order/create
+      const { data } = await axios.post(`${API_BASE}/api/order/create`, {
         name,
         phone,
       });
@@ -94,34 +98,36 @@ export default function App() {
         amount: data.amount,
         currency: data.currency,
         name: ORG.name,
-        description: 'Ganesh Prasad Laddu Purchase',
+        description: 'Ganesh Prasad Laddu – Food Product Purchase',
         order_id: data.order_id,
         prefill: { name, contact: phone },
         theme: { color: '#b71c1c' },
         handler: async function (response) {
           try {
-            const verifyRes = await axios.post(`${API_BASE}/api/pass/verify`, {
+            // ✅ CHANGED: /api/order/verify and orderNo
+            const verifyRes = await axios.post(`${API_BASE}/api/order/verify`, {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-              passNo: data.passNo,
+              orderNo: data.orderNo,
             });
 
             if (verifyRes.data.success) {
               setIsPaid(true);
               setWhatsappUrl(verifyRes.data.whatsappUrl);
-              setConfirmedOrder(verifyRes.data.passDetails);
+              // ✅ CHANGED: orderDetails
+              setConfirmedOrder(verifyRes.data.orderDetails);
             } else {
               alert(
                 'Payment verification failed: ' +
-                (verifyRes.data.message || 'unknown')
+                  (verifyRes.data.message || 'unknown')
               );
             }
           } catch (err) {
             console.error('Verification error:', err);
             alert(
               'Payment verification error. Please contact support with Payment ID: ' +
-              response.razorpay_payment_id
+                response.razorpay_payment_id
             );
           } finally {
             setLoading(false);
@@ -204,7 +210,9 @@ function ShopPage({
     <div style={styles.shopContainer}>
       <div style={styles.headerSection}>
         <h1 style={styles.eventName}>🪔 {ORG.name} 🪔</h1>
-        <p style={styles.eventLocation}>📍 Gaddiannaram, Dilsukhnagar, Hyderabad</p>
+        <p style={styles.eventLocation}>
+          📍 Gaddiannaram, Dilsukhnagar, Hyderabad
+        </p>
       </div>
 
       <div style={styles.countdownSection}>
@@ -213,9 +221,18 @@ function ShopPage({
         </p>
         <div style={styles.countdownGrid}>
           <TimeBlock num={timeLeft.days} label="Days" />
-          <TimeBlock num={String(timeLeft.hours).padStart(2, '0')} label="Hours" />
-          <TimeBlock num={String(timeLeft.minutes).padStart(2, '0')} label="Min" />
-          <TimeBlock num={String(timeLeft.seconds).padStart(2, '0')} label="Sec" />
+          <TimeBlock
+            num={String(timeLeft.hours).padStart(2, '0')}
+            label="Hours"
+          />
+          <TimeBlock
+            num={String(timeLeft.minutes).padStart(2, '0')}
+            label="Min"
+          />
+          <TimeBlock
+            num={String(timeLeft.seconds).padStart(2, '0')}
+            label="Sec"
+          />
         </div>
       </div>
 
@@ -262,13 +279,20 @@ function ShopPage({
             <h2 style={styles.successTitle}>Order Placed Successfully!</h2>
 
             <div style={styles.detailCard}>
-              <DetailRow label="Customer" value={confirmedOrder?.name || ''} />
+              <DetailRow
+                label="Customer"
+                value={confirmedOrder?.name || ''}
+              />
+              {/* ✅ CHANGED: orderNo */}
               <DetailRow
                 label="Order ID"
-                value={confirmedOrder?.passNo || ''}
+                value={confirmedOrder?.orderNo || ''}
                 highlight
               />
-              <DetailRow label="Phone" value={confirmedOrder?.phone || ''} />
+              <DetailRow
+                label="Phone"
+                value={confirmedOrder?.phone || ''}
+              />
               <DetailRow label="Amount Paid" value="₹20" />
             </div>
 
@@ -281,7 +305,9 @@ function ShopPage({
               📲 Send Receipt on WhatsApp
             </a>
 
-            <p style={styles.blessing}>🙏 Blessings to you and your family 🙏</p>
+            <p style={styles.blessing}>
+              🙏 Blessings to you and your family 🙏
+            </p>
           </div>
         )}
       </div>
@@ -323,13 +349,15 @@ function Footer({ goTo }) {
     { key: 'terms', label: 'Terms & Conditions' },
     { key: 'refund', label: 'Refund Policy' },
     { key: 'privacy', label: 'Privacy Policy' },
-    { key: 'shipping', label: 'Delivery Policy' },
+    { key: 'shipping', label: 'Shipping & Pickup Policy' },
     { key: 'contact', label: 'Contact Us' },
   ];
 
   return (
     <footer style={styles.footer}>
-      <p style={styles.footerText}>🪔 {ORG.name} • Dilsukhnagar, Hyderabad 🪔</p>
+      <p style={styles.footerText}>
+        🪔 {ORG.name} • Dilsukhnagar, Hyderabad 🪔
+      </p>
       <p style={styles.footerLinks}>
         {links.map((l, i) => (
           <React.Fragment key={l.key}>
@@ -354,7 +382,7 @@ function PolicyPage({ page, goTo }) {
     { key: 'terms', label: 'Terms & Conditions' },
     { key: 'refund', label: 'Refund Policy' },
     { key: 'privacy', label: 'Privacy Policy' },
-    { key: 'shipping', label: 'Delivery Policy' },
+    { key: 'shipping', label: 'Shipping & Pickup Policy' },
     { key: 'contact', label: 'Contact Us' },
   ];
 
@@ -427,18 +455,21 @@ function AboutContent() {
 
       <h2 style={styles.policyH2}>About Ganesh Prasad Laddu</h2>
       <p>
-        During the festival we prepare a limited quantity of <strong>Ganesh Prasad Laddu</strong>{' '}
-        for distribution at the pandal counter. To help us plan quantities
-        accurately and avoid crowding, devotees can purchase their Ganesh Prasad Laddu
-        in advance for <strong>₹20 per unit</strong>.
+        During the festival we prepare a limited quantity of{' '}
+        <strong>Ganesh Prasad Laddu</strong> for distribution at the pandal
+        counter. To help us plan quantities accurately and avoid crowding,
+        devotees can purchase their Ganesh Prasad Laddu in advance for{' '}
+        <strong>₹20 per unit</strong>.
       </p>
       <ul>
         <li>
-          Each order entitles the customer to collect <strong>one Ganesh Prasad Laddu</strong>{' '}
-          at the Vinayak Chaturthi Pandal / Prasadam counter.
+          Each order entitles the customer to collect{' '}
+          <strong>one Ganesh Prasad Laddu</strong> at the Vinayak Chaturthi
+          Pandal / Prasadam counter.
         </li>
         <li>
-          The order confirmation (Order ID) is delivered on WhatsApp instantly after payment is confirmed.
+          The order confirmation (Order ID) is delivered on WhatsApp instantly
+          after payment is confirmed.
         </li>
         <li>
           The order is valid only for the current festival duration and is
@@ -482,14 +513,15 @@ function TermsContent() {
     <div>
       <h1 style={styles.policyH1}>Terms &amp; Conditions</h1>
       <p>
-        By purchasing Ganesh Prasad Laddu on this website, you agree to the following
-        terms:
+        By purchasing Ganesh Prasad Laddu on this website, you agree to the
+        following terms:
       </p>
       <ul>
         <li>The price is ₹20 per Ganesh Prasad Laddu.</li>
         <li>
-          Each successful payment guarantees one Ganesh Prasad Laddu to be collected
-          at the Vinayak Chaturthi Pandal counter during the festival.
+          Each successful payment guarantees one Ganesh Prasad Laddu to be
+          collected at the Vinayak Chaturthi Pandal counter during the
+          festival.
         </li>
         <li>
           The order confirmation (Order ID) will be sent to your WhatsApp
@@ -500,8 +532,8 @@ function TermsContent() {
           will be rejected.
         </li>
         <li>
-          The Ganesh Prasad Laddu must be collected in person during the festival. No
-          shipping is provided.
+          The Ganesh Prasad Laddu must be collected in person during the
+          festival. No shipping is provided.
         </li>
         <li>The organiser's decision regarding the distribution is final.</li>
         <li>
@@ -574,25 +606,34 @@ function PrivacyContent() {
 function ShippingContent() {
   return (
     <div>
-      <h1 style={styles.policyH1}>Delivery Policy</h1>
+      <h1 style={styles.policyH1}>Shipping &amp; Pickup Policy</h1>
       <p>
-        This is an <strong>online purchase for a physical product (Ganesh Prasad Laddu)</strong>.
+        This website sells a{' '}
+        <strong>physical food product (Ganesh Prasad Laddu)</strong>. We offer{' '}
+        <strong>local counter pickup</strong> for all physical orders. We do
+        not ship products to customer addresses.
       </p>
       <ul>
         <li>
-          No shipping is provided. The Ganesh Prasad Laddu must be collected in person
-          at the {ORG.name} Prasadam counter during the festival.
+          Upon successful payment, an{' '}
+          <strong>Order Receipt with an Order ID</strong> is generated
+          instantly and delivered to the customer via WhatsApp.
         </li>
         <li>
-          Your Order ID is delivered instantly via WhatsApp after
-          successful payment verification.
+          Customers can present their Order Receipt at our physical counter
+          address to collect their physical food product:
+          <br />
+          <strong>{ORG.venue}</strong>
         </li>
         <li>
-          Show the WhatsApp confirmation at the counter to collect your
-          Ganesh Prasad Laddu.
+          <strong>Pickup Counter Timings:</strong> {ORG.counterTimings}
         </li>
         <li>
-          If you do not receive the WhatsApp message within 30 minutes of
+          No shipping or home delivery is provided. All orders must be
+          collected in person at the counter during the festival.
+        </li>
+        <li>
+          If you do not receive the WhatsApp Order Receipt within 30 minutes of
           payment, contact us at {ORG.email} or {ORG.phone}.
         </li>
       </ul>
@@ -619,7 +660,7 @@ function ContactContent() {
       </div>
       <p>
         For any queries regarding your Ganesh Prasad Laddu order, refunds, or
-        delivery, please contact us using the details above. We aim to respond
+        pickup, please contact us using the details above. We aim to respond
         within 24 hours.
       </p>
     </div>
@@ -658,7 +699,8 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0.4) 30%, rgba(74,14,14,0.85) 60%, rgba(0,0,0,0.95) 100%)',
+    background:
+      'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0.4) 30%, rgba(74,14,14,0.85) 60%, rgba(0,0,0,0.95) 100%)',
     pointerEvents: 'none',
   },
   content: {
@@ -678,8 +720,6 @@ const styles = {
     alignItems: 'center',
     padding: '0 16px',
   },
-
-  // -------- Header --------
   headerSection: {
     textAlign: 'center',
   },
@@ -689,7 +729,8 @@ const styles = {
     fontWeight: 'bold',
     color: '#FFD700',
     letterSpacing: '0.5px',
-    textShadow: '0 4px 20px rgba(0,0,0,0.95), 0 0 30px rgba(212,160,23,0.6)',
+    textShadow:
+      '0 4px 20px rgba(0,0,0,0.95), 0 0 30px rgba(212,160,23,0.6)',
   },
   eventLocation: {
     margin: '10px 0 0',
@@ -698,8 +739,6 @@ const styles = {
     letterSpacing: '0.4px',
     textShadow: '0 2px 10px rgba(0,0,0,0.95)',
   },
-
-  // -------- Countdown --------
   countdownSection: {
     width: '100%',
     textAlign: 'center',
@@ -747,8 +786,6 @@ const styles = {
     letterSpacing: '1.2px',
     marginTop: '5px',
   },
-
-  // -------- Glass form card --------
   glassCard: {
     width: '100%',
     maxWidth: '460px',
@@ -813,8 +850,6 @@ const styles = {
     textAlign: 'center',
     textShadow: '0 1px 5px rgba(0,0,0,0.8)',
   },
-
-  // -------- Success --------
   successBox: { textAlign: 'center' },
   successIcon: { fontSize: '44px', marginBottom: '4px' },
   successTitle: {
@@ -874,8 +909,6 @@ const styles = {
     fontStyle: 'italic',
     textShadow: '0 1px 6px rgba(0,0,0,0.85)',
   },
-
-  // -------- Footer --------
   footer: {
     width: '100%',
     textAlign: 'center',
@@ -908,8 +941,6 @@ const styles = {
     textTransform: 'uppercase',
     color: '#ffe0b2',
   },
-
-  // -------- Policy pages --------
   policyContainer: {
     width: '100%',
     maxWidth: '800px',
@@ -970,8 +1001,6 @@ const styles = {
     fontSize: '13px',
     color: '#666',
   },
-
-  // Solid Black Section at Bottom
   bottomBlackSection: {
     width: '100%',
     height: '200px',
