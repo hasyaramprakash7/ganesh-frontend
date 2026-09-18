@@ -6,23 +6,23 @@ const API_BASE = 'https://ganesh-ikqb.onrender.com';
 
 const ORG = {
   name: 'Gaddiannaram Utsav Samithi',
-  entityType: 'Registered Festival Committee (Mandap Committee)',
+  entityType: 'Food Retail / Prasadam Distribution',
   address: 'Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060, India',
   email: 'bluxury1000@gmail.com',
   phone: '+91 7893828468',
-  festival: 'Vinayak Ganesh Chaturthi 2026',
-  venue: 'Gaddiannaram Utsav Samithi Pandal, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
+  festival: 'Ganesh Chaturthi 2026 – Prasadam Distribution',
+  venue: 'Gaddiannaram Utsav Samithi Prasadam Counter, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
   counterTimings: '8:00 AM – 9:00 PM (all festival days)',
 };
 
 export default function App() {
-  const [page, setPage] = useState('booking');
+  const [page, setPage] = useState('shop');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [whatsappUrl, setWhatsappUrl] = useState('');
-  const [confirmedPass, setConfirmedPass] = useState(null);
+  const [confirmedOrder, setConfirmedOrder] = useState(null);
 
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
@@ -94,7 +94,7 @@ export default function App() {
         amount: data.amount,
         currency: data.currency,
         name: ORG.name,
-        description: 'Laddu Prasad Pass Booking',
+        description: 'Ganesh Prasad Laddu Purchase',
         order_id: data.order_id,
         prefill: { name, contact: phone },
         theme: { color: '#b71c1c' },
@@ -110,7 +110,7 @@ export default function App() {
             if (verifyRes.data.success) {
               setIsPaid(true);
               setWhatsappUrl(verifyRes.data.whatsappUrl);
-              setConfirmedPass(verifyRes.data.passDetails);
+              setConfirmedOrder(verifyRes.data.passDetails);
             } else {
               alert(
                 'Payment verification failed: ' +
@@ -152,15 +152,15 @@ export default function App() {
 
   return (
     <div style={styles.root}>
-      {/* ⭐ Background Image Wrapper to keep natural image height */}
+      {/* Background Image Wrapper */}
       <div style={styles.bgImageWrapper}>
         <img src={ganeshImg} alt="Ganesha" style={styles.bgImage} />
         <div style={styles.bgOverlay} />
       </div>
 
       <div style={styles.content}>
-        {page === 'booking' ? (
-          <BookingPage
+        {page === 'shop' ? (
+          <ShopPage
             name={name}
             setName={setName}
             phone={phone}
@@ -168,7 +168,7 @@ export default function App() {
             loading={loading}
             isPaid={isPaid}
             whatsappUrl={whatsappUrl}
-            confirmedPass={confirmedPass}
+            confirmedOrder={confirmedOrder}
             handleSubmit={handleSubmit}
             timeLeft={timeLeft}
             goTo={goTo}
@@ -177,7 +177,7 @@ export default function App() {
           <PolicyPage page={page} goTo={goTo} />
         )}
 
-        {/* ⭐ Solid Black Section at the Bottom */}
+        {/* Solid Black Section at the Bottom */}
         <div style={styles.bottomBlackSection} />
       </div>
     </div>
@@ -185,9 +185,9 @@ export default function App() {
 }
 
 // ============================================================
-// BOOKING PAGE
+// SHOP PAGE
 // ============================================================
-function BookingPage({
+function ShopPage({
   name,
   setName,
   phone,
@@ -195,13 +195,13 @@ function BookingPage({
   loading,
   isPaid,
   whatsappUrl,
-  confirmedPass,
+  confirmedOrder,
   handleSubmit,
   timeLeft,
   goTo,
 }) {
   return (
-    <div style={styles.bookingContainer}>
+    <div style={styles.shopContainer}>
       <div style={styles.headerSection}>
         <h1 style={styles.eventName}>🪔 {ORG.name} 🪔</h1>
         <p style={styles.eventLocation}>📍 Gaddiannaram, Dilsukhnagar, Hyderabad</p>
@@ -209,7 +209,7 @@ function BookingPage({
 
       <div style={styles.countdownSection}>
         <p style={styles.countdownLabel}>
-          🎯 Laddu Collection Starts: 25th at 1:00 PM
+          🎯 Laddu Pickup Starts: 25th at 1:00 PM
         </p>
         <div style={styles.countdownGrid}>
           <TimeBlock num={timeLeft.days} label="Days" />
@@ -222,7 +222,7 @@ function BookingPage({
       <div style={styles.glassCard}>
         {!isPaid ? (
           <form onSubmit={handleSubmit}>
-            <h2 style={styles.formTitle}>🎟️ Book Your Laddu Prasad Pass</h2>
+            <h2 style={styles.formTitle}>🛒 Buy Ganesh Prasad Laddu (₹20)</h2>
 
             <div style={styles.field}>
               <label style={styles.label}>Full Name</label>
@@ -251,7 +251,7 @@ function BookingPage({
             </div>
 
             <button type="submit" disabled={loading} style={styles.payBtn}>
-              {loading ? '⏳ Processing...' : '💰 Pay ₹20 & Get Pass'}
+              {loading ? '⏳ Processing...' : '💰 Pay ₹20 & Place Order'}
             </button>
 
             <p style={styles.note}>🔒 Secure payment via Razorpay</p>
@@ -259,16 +259,16 @@ function BookingPage({
         ) : (
           <div style={styles.successBox}>
             <div style={styles.successIcon}>✅</div>
-            <h2 style={styles.successTitle}>Booking Successful!</h2>
+            <h2 style={styles.successTitle}>Order Placed Successfully!</h2>
 
             <div style={styles.detailCard}>
-              <DetailRow label="Devotee" value={confirmedPass?.name || ''} />
+              <DetailRow label="Customer" value={confirmedOrder?.name || ''} />
               <DetailRow
-                label="Pass No"
-                value={confirmedPass?.passNo || ''}
+                label="Order ID"
+                value={confirmedOrder?.passNo || ''}
                 highlight
               />
-              <DetailRow label="Phone" value={confirmedPass?.phone || ''} />
+              <DetailRow label="Phone" value={confirmedOrder?.phone || ''} />
               <DetailRow label="Amount Paid" value="₹20" />
             </div>
 
@@ -278,7 +278,7 @@ function BookingPage({
               rel="noopener noreferrer"
               style={styles.whatsappBtn}
             >
-              📲 Send Pass on WhatsApp
+              📲 Send Receipt on WhatsApp
             </a>
 
             <p style={styles.blessing}>🙏 Blessings to you and your family 🙏</p>
@@ -360,8 +360,8 @@ function PolicyPage({ page, goTo }) {
 
   return (
     <div style={styles.policyContainer}>
-      <span style={styles.backLink} onClick={() => goTo('booking')}>
-        ← Back to Booking
+      <span style={styles.backLink} onClick={() => goTo('shop')}>
+        ← Back to Shop
       </span>
 
       <nav style={styles.policyNav}>
@@ -401,7 +401,7 @@ function PolicyPage({ page, goTo }) {
 function AboutContent() {
   return (
     <div>
-      <h1 style={styles.policyH1}>About Us &amp; Event Details</h1>
+      <h1 style={styles.policyH1}>About Us &amp; Prasadam Details</h1>
       <div style={styles.policyCard}>
         <p>
           <strong>Organisation Name:</strong> {ORG.name}
@@ -425,30 +425,28 @@ function AboutContent() {
         festival.
       </p>
 
-      <h2 style={styles.policyH2}>About the Laddu Prasad Pass</h2>
+      <h2 style={styles.policyH2}>About Ganesh Prasad Laddu</h2>
       <p>
-        During the festival we prepare a limited quantity of <strong>Laddu Prasad</strong>{' '}
+        During the festival we prepare a limited quantity of <strong>Ganesh Prasad Laddu</strong>{' '}
         for distribution at the pandal counter. To help us plan quantities
-        accurately and avoid crowding, devotees can reserve their Laddu Prasad
-        in advance by booking a <strong>Festival Laddu Booking Ticket (Laddu
-          Prasad Pass)</strong> for <strong>₹20</strong> per pass.
+        accurately and avoid crowding, devotees can purchase their Ganesh Prasad Laddu
+        in advance for <strong>₹20 per unit</strong>.
       </p>
       <ul>
         <li>
-          Each pass entitles the holder to collect <strong>one Laddu Prasad</strong>{' '}
-          at the Vinayak Chaturthi Pandal / Event counter.
+          Each order entitles the customer to collect <strong>one Ganesh Prasad Laddu</strong>{' '}
+          at the Vinayak Chaturthi Pandal / Prasadam counter.
         </li>
         <li>
-          The pass is issued digitally as a pass number and delivered on
-          WhatsApp instantly after payment is confirmed.
+          The order confirmation (Order ID) is delivered on WhatsApp instantly after payment is confirmed.
         </li>
         <li>
-          The pass is valid only for the current festival duration and is
+          The order is valid only for the current festival duration and is
           non-transferable.
         </li>
       </ul>
 
-      <h2 style={styles.policyH2}>Event Details</h2>
+      <h2 style={styles.policyH2}>Prasadam Details</h2>
       <div style={styles.policyCard}>
         <p>
           <strong>Festival:</strong> {ORG.festival}
@@ -457,16 +455,16 @@ function AboutContent() {
           <br />
           <strong>Prasadam Counter Timings:</strong> {ORG.counterTimings}
           <br />
-          <strong>Pass Booking:</strong> Open online through this website
+          <strong>Online Purchase:</strong> Open through this website
         </p>
       </div>
 
       <h2 style={styles.policyH2}>Our Service</h2>
       <p>
-        This website is a booking and reservation service for the Laddu Prasad
+        This website is an online purchase service for the Ganesh Prasad Laddu
         distribution conducted by the committee. It is not a financial product,
         investment product, gift card or loyalty programme of any kind. All
-        payments are collected solely as a festival prasadam booking fee.
+        payments are collected solely as a food product purchase fee.
       </p>
 
       <h2 style={styles.policyH2}>Payments</h2>
@@ -484,25 +482,25 @@ function TermsContent() {
     <div>
       <h1 style={styles.policyH1}>Terms &amp; Conditions</h1>
       <p>
-        By booking a Laddu Prasad on this website, you agree to the following
+        By purchasing Ganesh Prasad Laddu on this website, you agree to the following
         terms:
       </p>
       <ul>
-        <li>The pre-booking fee is ₹20 per Laddu Prasad.</li>
+        <li>The price is ₹20 per Ganesh Prasad Laddu.</li>
         <li>
-          Each successful payment guarantees one Laddu Prasad to be collected
+          Each successful payment guarantees one Ganesh Prasad Laddu to be collected
           at the Vinayak Chaturthi Pandal counter during the festival.
         </li>
         <li>
-          The booking confirmation (Pass No) will be sent to your WhatsApp
+          The order confirmation (Order ID) will be sent to your WhatsApp
           number after payment verification.
         </li>
         <li>
-          The pass is non-transferable. Duplicate or tampered confirmations
+          The order is non-transferable. Duplicate or tampered confirmations
           will be rejected.
         </li>
         <li>
-          The Laddu Prasad must be collected in person during the festival. No
+          The Ganesh Prasad Laddu must be collected in person during the festival. No
           shipping is provided.
         </li>
         <li>The organiser's decision regarding the distribution is final.</li>
@@ -521,11 +519,11 @@ function RefundContent() {
       <h1 style={styles.policyH1}>Refund &amp; Cancellation Policy</h1>
       <ul>
         <li>
-          The ₹20 pre-booking fee is <strong>non-refundable</strong> once
+          The ₹20 purchase amount is <strong>non-refundable</strong> once
           payment is successful.
         </li>
         <li>
-          If a payment is deducted but the booking is not generated due to a
+          If a payment is deducted but the order is not generated due to a
           technical failure on our side, contact us within 24 hours with your
           Razorpay Payment ID and we will process a full refund.
         </li>
@@ -551,7 +549,7 @@ function PrivacyContent() {
       </p>
       <ul>
         <li>
-          This information is used solely to generate your booking and send
+          This information is used solely to generate your order and send
           confirmation via WhatsApp.
         </li>
         <li>
@@ -563,7 +561,7 @@ function PrivacyContent() {
         </li>
         <li>
           Data is stored securely and retained only for the duration of this
-          event.
+          festival.
         </li>
         <li>
           To request deletion of your data, email us at {ORG.email}.
@@ -578,20 +576,20 @@ function ShippingContent() {
     <div>
       <h1 style={styles.policyH1}>Delivery Policy</h1>
       <p>
-        This is a <strong>pre-booking for a physical product (Laddu Prasad)</strong>.
+        This is an <strong>online purchase for a physical product (Ganesh Prasad Laddu)</strong>.
       </p>
       <ul>
         <li>
-          No shipping is provided. The Laddu Prasad must be collected in person
-          at the {ORG.name} Pandal counter during the festival.
+          No shipping is provided. The Ganesh Prasad Laddu must be collected in person
+          at the {ORG.name} Prasadam counter during the festival.
         </li>
         <li>
-          Your pass number (Pass No) is delivered instantly via WhatsApp after
+          Your Order ID is delivered instantly via WhatsApp after
           successful payment verification.
         </li>
         <li>
-          Show the WhatsApp confirmation at the pandal counter to collect your
-          Laddu Prasad.
+          Show the WhatsApp confirmation at the counter to collect your
+          Ganesh Prasad Laddu.
         </li>
         <li>
           If you do not receive the WhatsApp message within 30 minutes of
@@ -620,7 +618,7 @@ function ContactContent() {
         </p>
       </div>
       <p>
-        For any queries regarding your Laddu Prasad booking, refunds, or
+        For any queries regarding your Ganesh Prasad Laddu order, refunds, or
         delivery, please contact us using the details above. We aim to respond
         within 24 hours.
       </p>
@@ -632,7 +630,6 @@ function ContactContent() {
 // STYLES
 // ============================================================
 const styles = {
-  // -------- Root layout --------
   root: {
     position: 'relative',
     minHeight: '100vh',
@@ -640,7 +637,7 @@ const styles = {
     margin: 0,
     padding: 0,
     fontFamily: "'Segoe UI', system-ui, sans-serif",
-    backgroundColor: '#000', // Fallback for area below the image
+    backgroundColor: '#000',
     overflowX: 'hidden',
   },
   bgImageWrapper: {
@@ -652,7 +649,7 @@ const styles = {
   },
   bgImage: {
     width: '100%',
-    height: 'auto', // ⭐ Keeps the image height natural
+    height: 'auto',
     display: 'block',
   },
   bgOverlay: {
@@ -660,8 +657,7 @@ const styles = {
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0, // Covers exactly the image height
-    // Top 15% fully transparent, then darkens from 20% down
+    bottom: 0,
     background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0.4) 30%, rgba(74,14,14,0.85) 60%, rgba(0,0,0,0.95) 100%)',
     pointerEvents: 'none',
   },
@@ -672,9 +668,9 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    paddingTop: '20vh', // ⭐ Starts content exactly 20% down the screen
+    paddingTop: '20vh',
   },
-  bookingContainer: {
+  shopContainer: {
     width: '100%',
     maxWidth: '500px',
     display: 'flex',
@@ -686,7 +682,6 @@ const styles = {
   // -------- Header --------
   headerSection: {
     textAlign: 'center',
-    marginBottom: '40px', // Space below the header text
   },
   eventName: {
     margin: 0,
@@ -708,8 +703,8 @@ const styles = {
   countdownSection: {
     width: '100%',
     textAlign: 'center',
-    marginBottom: '40px', // Space below countdown
-    marginTop: '40px', // Space above countdown
+    marginBottom: '40px',
+    marginTop: '40px',
   },
   countdownLabel: {
     margin: '0 0 14px',
@@ -976,7 +971,7 @@ const styles = {
     color: '#666',
   },
 
-  // ⭐ Solid Black Section at Bottom
+  // Solid Black Section at Bottom
   bottomBlackSection: {
     width: '100%',
     height: '200px',
