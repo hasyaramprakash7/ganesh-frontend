@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import ganeshImg from '../assets/ganesh.jpeg';
+import ganeshImg from '../assets/ganesh.jpeg'; // Ensure this path is correct
 
 const API_BASE = 'https://ganesh-ikqb.onrender.com';
 
-// ============================================================
-// BUSINESS / EVENT CONSTANTS — edit these in one place
-// ============================================================
 const ORG = {
   name: 'Gaddiannaram Utsav Samithi',
   entityType: 'Registered Festival Committee (Mandap Committee)',
@@ -14,19 +11,12 @@ const ORG = {
   email: 'bluxury1000@gmail.com',
   phone: '+91 7893828468',
   festival: 'Vinayak Ganesh Chaturthi 2026',
-  venue:
-    'Gaddiannaram Utsav Samithi Pandal, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
+  venue: 'Gaddiannaram Utsav Samithi Pandal, Gaddiannaram, Dilsukhnagar, Hyderabad, Telangana 500060',
   counterTimings: '8:00 AM – 9:00 PM (all festival days)',
 };
 
-// ============================================================
-// MAIN APP
-// ============================================================
 export default function App() {
-  // Current page: 'booking' | 'about' | 'terms' | 'refund' | 'privacy' | 'shipping' | 'contact'
   const [page, setPage] = useState('booking');
-
-  // Booking form state
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,10 +35,10 @@ export default function App() {
 
   // Warm up backend
   useEffect(() => {
-    axios.get(`${API_BASE}/`).catch(() => {});
+    axios.get(`${API_BASE}/`).catch(() => { });
   }, []);
 
-  // Countdown
+  // Countdown timer
   useEffect(() => {
     const tick = () => {
       const distance = COLLECTION_DATE.getTime() - new Date().getTime();
@@ -124,14 +114,14 @@ export default function App() {
             } else {
               alert(
                 'Payment verification failed: ' +
-                  (verifyRes.data.message || 'unknown')
+                (verifyRes.data.message || 'unknown')
               );
             }
           } catch (err) {
             console.error('Verification error:', err);
             alert(
               'Payment verification error. Please contact support with Payment ID: ' +
-                response.razorpay_payment_id
+              response.razorpay_payment_id
             );
           } finally {
             setLoading(false);
@@ -160,9 +150,6 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
   return (
     <div
       style={{
@@ -190,6 +177,9 @@ export default function App() {
         ) : (
           <PolicyPage page={page} goTo={goTo} />
         )}
+
+        {/* ⭐ Solid Black Section at the Bottom */}
+        <div style={styles.bottomBlackSection} />
       </div>
     </div>
   );
@@ -212,11 +202,7 @@ function BookingPage({
   goTo,
 }) {
   return (
-    <>
-      <div style={styles.topImageWrap}>
-        <img src={ganeshImg} alt="Ganesh Idol" style={styles.topImage} />
-      </div>
-
+    <div style={styles.bookingContainer}>
       <div style={styles.headerSection}>
         <h1 style={styles.eventName}>🪔 {ORG.name} 🪔</h1>
         <p style={styles.eventLocation}>📍 Gaddiannaram, Dilsukhnagar, Hyderabad</p>
@@ -277,13 +263,13 @@ function BookingPage({
             <h2 style={styles.successTitle}>Booking Successful!</h2>
 
             <div style={styles.detailCard}>
-              <DetailRow label="Devotee" value={confirmedPass.name} />
+              <DetailRow label="Devotee" value={confirmedPass?.name || ''} />
               <DetailRow
                 label="Pass No"
-                value={confirmedPass.passNo}
+                value={confirmedPass?.passNo || ''}
                 highlight
               />
-              <DetailRow label="Phone" value={confirmedPass.phone} />
+              <DetailRow label="Phone" value={confirmedPass?.phone || ''} />
               <DetailRow label="Amount Paid" value="₹20" />
             </div>
 
@@ -302,7 +288,7 @@ function BookingPage({
       </div>
 
       <Footer goTo={goTo} />
-    </>
+    </div>
   );
 }
 
@@ -330,7 +316,7 @@ function DetailRow({ label, value, highlight }) {
 }
 
 // ============================================================
-// FOOTER with policy links
+// FOOTER
 // ============================================================
 function Footer({ goTo }) {
   const links = [
@@ -415,7 +401,7 @@ function PolicyPage({ page, goTo }) {
 // ============================================================
 function AboutContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>About Us &amp; Event Details</h1>
       <div style={styles.policyCard}>
         <p>
@@ -446,7 +432,7 @@ function AboutContent() {
         for distribution at the pandal counter. To help us plan quantities
         accurately and avoid crowding, devotees can reserve their Laddu Prasad
         in advance by booking a <strong>Festival Laddu Booking Ticket (Laddu
-        Prasad Pass)</strong> for <strong>₹20</strong> per pass.
+          Prasad Pass)</strong> for <strong>₹20</strong> per pass.
       </p>
       <ul>
         <li>
@@ -490,13 +476,13 @@ function AboutContent() {
         payment gateway partner <strong>Razorpay</strong>. We do not store your
         card, UPI or bank account details on our servers.
       </p>
-    </>
+    </div>
   );
 }
 
 function TermsContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>Terms &amp; Conditions</h1>
       <p>
         By booking a Laddu Prasad on this website, you agree to the following
@@ -526,13 +512,13 @@ function TermsContent() {
           will result in cancellation without refund.
         </li>
       </ul>
-    </>
+    </div>
   );
 }
 
 function RefundContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>Refund &amp; Cancellation Policy</h1>
       <ul>
         <li>
@@ -552,13 +538,13 @@ function RefundContent() {
           For refund requests, email {ORG.email} or call {ORG.phone}.
         </li>
       </ul>
-    </>
+    </div>
   );
 }
 
 function PrivacyContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>Privacy Policy</h1>
       <p>
         We collect only the information you provide:{' '}
@@ -584,13 +570,13 @@ function PrivacyContent() {
           To request deletion of your data, email us at {ORG.email}.
         </li>
       </ul>
-    </>
+    </div>
   );
 }
 
 function ShippingContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>Delivery Policy</h1>
       <p>
         This is a <strong>pre-booking for a physical product (Laddu Prasad)</strong>.
@@ -613,13 +599,13 @@ function ShippingContent() {
           payment, contact us at {ORG.email} or {ORG.phone}.
         </li>
       </ul>
-    </>
+    </div>
   );
 }
 
 function ContactContent() {
   return (
-    <>
+    <div>
       <h1 style={styles.policyH1}>Contact Us</h1>
       <div style={styles.policyCard}>
         <p>
@@ -639,7 +625,7 @@ function ContactContent() {
         delivery, please contact us using the details above. We aim to respond
         within 24 hours.
       </p>
-    </>
+    </div>
   );
 }
 
@@ -656,16 +642,15 @@ const styles = {
     padding: 0,
     fontFamily: "'Segoe UI', system-ui, sans-serif",
     backgroundSize: 'cover',
-    backgroundPosition: 'center center',
+    backgroundPosition: 'center top', // ⭐ Keeps the top of the image (face) visible
     backgroundRepeat: 'no-repeat',
-    backgroundAttachment: 'fixed',
     overflowX: 'hidden',
   },
   bgOverlay: {
-    position: 'fixed',
+    position: 'absolute',
     inset: 0,
-    background:
-      'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(74,14,14,0.75) 50%, rgba(0,0,0,0.85) 100%)',
+    // ⭐ Top 15% fully transparent, then darkens from 20% down
+    background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0.4) 30%, rgba(74,14,14,0.85) 60%, rgba(0,0,0,0.95) 100%)',
     zIndex: 0,
     pointerEvents: 'none',
   },
@@ -676,45 +661,33 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
+    paddingTop: '20vh', // ⭐ Starts content exactly 20% down the screen
   },
-
-  // -------- Top image --------
-  topImageWrap: {
+  bookingContainer: {
     width: '100%',
-    minHeight: '100vh',
+    maxWidth: '500px',
     display: 'flex',
-    justifyContent: 'center',
+    flexDirection: 'column',
     alignItems: 'center',
-    background: 'transparent',
-    padding: 0,
-    margin: 0,
-  },
-  topImage: {
-    width: '100%',
-    height: '100vh',
-    maxHeight: '100vh',
-    objectFit: 'contain',
-    display: 'block',
+    padding: '0 16px',
   },
 
   // -------- Header --------
   headerSection: {
-    width: '100%',
-    maxWidth: '700px',
     textAlign: 'center',
-    padding: '30px 20px 20px',
+    marginBottom: '40px', // Space below the header text
   },
   eventName: {
     margin: 0,
-    fontSize: 'clamp(22px, 6vw, 34px)',
+    fontSize: '28px',
     fontWeight: 'bold',
     color: '#FFD700',
     letterSpacing: '0.5px',
-    textShadow: '0 3px 16px rgba(0,0,0,0.95), 0 0 24px rgba(212,160,23,0.5)',
+    textShadow: '0 4px 20px rgba(0,0,0,0.95), 0 0 30px rgba(212,160,23,0.6)',
   },
   eventLocation: {
     margin: '10px 0 0',
-    fontSize: 'clamp(13px, 3.5vw, 16px)',
+    fontSize: '14px',
     color: '#ffe0b2',
     letterSpacing: '0.4px',
     textShadow: '0 2px 10px rgba(0,0,0,0.95)',
@@ -723,13 +696,13 @@ const styles = {
   // -------- Countdown --------
   countdownSection: {
     width: '100%',
-    maxWidth: '520px',
     textAlign: 'center',
-    padding: '14px 20px 24px',
+    marginBottom: '40px', // Space below countdown
+    marginTop: '40px', // Space above countdown
   },
   countdownLabel: {
     margin: '0 0 14px',
-    fontSize: 'clamp(13px, 3.5vw, 15px)',
+    fontSize: '14px',
     fontWeight: 'bold',
     color: '#fff8e1',
     letterSpacing: '0.4px',
@@ -742,7 +715,7 @@ const styles = {
     flexWrap: 'wrap',
   },
   timeBlock: {
-    background: 'rgba(183, 28, 28, 0.55)',
+    background: 'rgba(183, 28, 28, 0.75)',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
     border: '1.5px solid rgba(255, 215, 0, 0.55)',
@@ -755,7 +728,7 @@ const styles = {
     boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
   },
   timeNum: {
-    fontSize: 'clamp(20px, 5vw, 24px)',
+    fontSize: '22px',
     fontWeight: 'bold',
     color: '#FFD700',
     lineHeight: 1,
@@ -773,8 +746,7 @@ const styles = {
   glassCard: {
     width: '100%',
     maxWidth: '460px',
-    margin: '10px 16px 40px',
-    background: 'rgba(255, 248, 240, 0.15)',
+    background: 'rgba(139, 0, 0, 0.75)',
     backdropFilter: 'blur(20px) saturate(180%)',
     WebkitBackdropFilter: 'blur(20px) saturate(180%)',
     border: '1.5px solid rgba(255, 255, 255, 0.35)',
@@ -783,6 +755,7 @@ const styles = {
     boxShadow:
       '0 25px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.3)',
     boxSizing: 'border-box',
+    marginBottom: '20px',
   },
   formTitle: {
     margin: '0 0 20px',
@@ -900,7 +873,7 @@ const styles = {
   footer: {
     width: '100%',
     textAlign: 'center',
-    padding: '20px 16px 40px',
+    padding: '20px 16px',
   },
   footerText: {
     margin: 0,
@@ -934,7 +907,7 @@ const styles = {
   policyContainer: {
     width: '100%',
     maxWidth: '800px',
-    margin: '40px auto 80px',
+    margin: '40px auto',
     padding: '26px 24px 34px',
     background: '#fffaf3',
     borderRadius: '16px',
@@ -990,5 +963,12 @@ const styles = {
     marginTop: '40px',
     fontSize: '13px',
     color: '#666',
+  },
+
+  // ⭐ Solid Black Section at Bottom
+  bottomBlackSection: {
+    width: '100%',
+    height: '200px',
+    marginTop: '20px',
   },
 };
