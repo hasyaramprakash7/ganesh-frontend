@@ -151,13 +151,12 @@ export default function App() {
   };
 
   return (
-    <div
-      style={{
-        ...styles.root,
-        backgroundImage: `url(${ganeshImg})`,
-      }}
-    >
-      <div style={styles.bgOverlay} />
+    <div style={styles.root}>
+      {/* ⭐ Background Image Wrapper to keep natural image height */}
+      <div style={styles.bgImageWrapper}>
+        <img src={ganeshImg} alt="Ganesha" style={styles.bgImage} />
+        <div style={styles.bgOverlay} />
+      </div>
 
       <div style={styles.content}>
         {page === 'booking' ? (
@@ -641,17 +640,29 @@ const styles = {
     margin: 0,
     padding: 0,
     fontFamily: "'Segoe UI', system-ui, sans-serif",
-    backgroundSize: 'cover',
-    backgroundPosition: 'center top', // ⭐ Keeps the top of the image (face) visible
-    backgroundRepeat: 'no-repeat',
+    backgroundColor: '#000', // Fallback for area below the image
     overflowX: 'hidden',
+  },
+  bgImageWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    zIndex: 0,
+  },
+  bgImage: {
+    width: '100%',
+    height: 'auto', // ⭐ Keeps the image height natural
+    display: 'block',
   },
   bgOverlay: {
     position: 'absolute',
-    inset: 0,
-    // ⭐ Top 15% fully transparent, then darkens from 20% down
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0, // Covers exactly the image height
+    // Top 15% fully transparent, then darkens from 20% down
     background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 15%, rgba(0,0,0,0.4) 30%, rgba(74,14,14,0.85) 60%, rgba(0,0,0,0.95) 100%)',
-    zIndex: 0,
     pointerEvents: 'none',
   },
   content: {
